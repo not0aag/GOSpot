@@ -33,7 +33,6 @@ This project is built against the material covered in a 9-week intro Android cou
 | Live interactive map | No Google Maps SDK / `GoogleMap` composable covered | Static layout with placeholder pins |
 | Automatic geofence check-in | No `GeofencingClient` / background location covered | Manual Check In / Check Out button |
 | Lot-full push alerts | No Firebase Cloud Messaging covered | Local UI toggle, not wired to real notifications |
-| Forgot password | Course covers sign up/in/out only, not `sendPasswordResetEmail` | Static placeholder notice |
 
 ## Setup
 
