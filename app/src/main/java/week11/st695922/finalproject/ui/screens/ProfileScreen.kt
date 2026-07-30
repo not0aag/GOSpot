@@ -1,0 +1,169 @@
+package week11.st695922.finalproject.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import week11.st695922.finalproject.model.UserProfile
+import week11.st695922.finalproject.ui.theme.GoGreen
+
+@Composable
+fun ProfileScreen(
+    profile: UserProfile,
+    checkInsCount: Int,
+    onChangeHomeStation: () -> Unit,
+    onSignOut: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp)
+    ) {
+        Text(
+            "Profile",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(top = 24.dp, bottom = 16.dp)
+        )
+
+        Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors()) {
+            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(GoGreen),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(initials(profile.fullName), color = Color.White, fontWeight = FontWeight.Bold)
+                }
+                Column(modifier = Modifier.padding(start = 12.dp)) {
+                    Text(profile.fullName.ifBlank { profile.email }, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Signed in with Firebase Auth",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            StatCard(value = "$checkInsCount", label = "check-ins recorded", modifier = Modifier.weight(1f))
+            StatCard(
+                value = profile.homeStationName.ifBlank { "-" },
+                label = "home station",
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        SectionLabel("PARKING")
+        SettingsRow(
+            title = "Home station",
+            subtitle = profile.homeStationName.ifBlank { "Not set" },
+            trailing = { TextButton(onClick = onChangeHomeStation) { Text("Change") } }
+        )
+        ToggleRow(
+            title = "Automatic check-in",
+            subtitle = "Requires GeofencingClient - not covered by the course material, so this toggle is local-only",
+            initialValue = false
+        )
+        ToggleRow(
+            title = "Contribute to live counts",
+            subtitle = "Your manual check-ins update the shared Firestore count",
+            initialValue = true
+        )
+
+        SectionLabel("ALERTS")
+        ToggleRow(
+            title = "Lot filling up alerts",
+            subtitle = "Push notifications need Firebase Cloud Messaging - not covered, local-only toggle",
+            initialValue = false
+        )
+
+        Spacer(Modifier.height(24.dp))
+        TextButton(onClick = onSignOut) {
+            Text("Sign out", color = MaterialTheme.colorScheme.error)
+        }
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
+private fun initials(name: String): String =
+    name.trim().split(" ").filter { it.isNotBlank() }.take(2).map { it.first().uppercaseChar() }.joinToString("")
+
+@Composable
+private fun StatCard(value: String, label: String, modifier: Modifier = Modifier) {
+    Card(modifier = modifier, shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 20.dp, bottom = 8.dp)
+    )
+}
+
+@Composable
+private fun SettingsRow(title: String, subtitle: String, trailing: @Composable () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(title, fontWeight = FontWeight.Medium)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        trailing()
+    }
+}
+
+@Composable
+private fun ToggleRow(title: String, subtitle: String, initialValue: Boolean) {
+    var checked by remember { mutableStateOf(initialValue) }
+    SettingsRow(title = title, subtitle = subtitle) {
+        Switch(checked = checked, onCheckedChange = { checked = it })
+    }
+}

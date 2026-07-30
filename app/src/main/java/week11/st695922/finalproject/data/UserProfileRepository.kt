@@ -1,0 +1,39 @@
+package week11.st695922.finalproject.data
+
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import week11.st695922.finalproject.model.Station
+import week11.st695922.finalproject.model.UserProfile
+import kotlin.coroutines.resume
+
+/**
+ * Repository for the per-user `users/{uid}` profile document
+ * (Week 6.2, Slides 6, 11, 19).
+ */
+class UserProfileRepository(
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+) {
+    fun profileFlow(uid: String): Flow<UserProfile?> = callbackFlow {
+        val listener = firestore.collection("users").document(uid)
+            .addSnapshotListener { snapshot, _ ->
+                trySend(snapshot?.toObject(UserProfile::class.java))
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun setHomeStation(uid: String, station: Station): Result<Unit> =
+        suspendCancellableCoroutine { cont ->
+            firestore.collection("users").document(uid)
+                .update(
+                    mapOf(
+                        "homeStationId" to station.id,
+                        "homeStationName" to station.name
+                    )
+                )
+                .addOnSuccessListener { cont.resume(Result.success(Unit)) }
+                .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
+        }
+}

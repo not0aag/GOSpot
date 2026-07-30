@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Per-user profile + home-station preference + check-in event log.
+    // Same shape as the users/{userId}/todos/{todoId} pattern from
+    // Week 6.2, Slide 6: only the owning signed-in user may read/write.
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      match /events/{eventId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // Shared station data. Any authenticated user may read/write, matching
+    // Week 5.2's "authenticated users can read/write" pattern (Slides 4, 7, 9-10).
+    //
+    // Open question (not resolved by the course material): this does not
+    // restrict which fields a normal user can touch on a station document -
+    // e.g. nothing stops a signed-in user from editing capacityTotal instead
+    // of just currentOccupancy. The security rules slides only demonstrate
+    // whole-document allow/deny plus one admin-by-UID exception, not
+    // field-level restrictions, so this first draft leaves it unresolved.
+    match /stations/{stationId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
