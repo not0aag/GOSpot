@@ -7,6 +7,7 @@ import android.location.Location
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -223,6 +224,7 @@ private fun SignedInApp(
     }
 
     Scaffold(
+        modifier = Modifier.safeDrawingPadding(),
         bottomBar = {
             GoSpotBottomNavBar(currentTab = currentTab, onTabSelected = { currentTab = it })
         }
