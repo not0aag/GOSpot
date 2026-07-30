@@ -30,6 +30,9 @@ class AuthViewModel @JvmOverloads constructor(
     private val _isSubmitting = MutableStateFlow(false)
     val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
 
+    private val _passwordResetSent = MutableStateFlow(false)
+    val passwordResetSent: StateFlow<Boolean> = _passwordResetSent.asStateFlow()
+
     init {
         viewModelScope.launch {
             repository.authStateFlow().collect { uid ->
@@ -60,6 +63,23 @@ class AuthViewModel @JvmOverloads constructor(
             _isSubmitting.value = false
             result.onFailure { e -> _formError.value = e.message ?: "Sign up failed" }
         }
+    }
+
+    fun sendPasswordReset(email: String) {
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            _formError.value = null
+            _passwordResetSent.value = false
+            val result = repository.sendPasswordReset(email)
+            _isSubmitting.value = false
+            result
+                .onSuccess { _passwordResetSent.value = true }
+                .onFailure { e -> _formError.value = e.message ?: "Couldn't send reset email" }
+        }
+    }
+
+    fun clearPasswordResetSent() {
+        _passwordResetSent.value = false
     }
 
     fun signOut() {

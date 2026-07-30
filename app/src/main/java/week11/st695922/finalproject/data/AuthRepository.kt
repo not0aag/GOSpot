@@ -71,6 +71,18 @@ class AuthRepository(
                 }
         }
 
+    suspend fun sendPasswordReset(email: String): Result<Unit> =
+        suspendCancellableCoroutine { cont ->
+            auth.sendPasswordResetEmail(email)
+                .addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        cont.resume(Result.success(Unit))
+                    } else {
+                        cont.resume(Result.failure(task.exception ?: Exception("Couldn't send reset email")))
+                    }
+                }
+        }
+
     fun signOut() {
         auth.signOut()
     }

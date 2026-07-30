@@ -74,6 +74,7 @@ private fun AuthFlow(authViewModel: AuthViewModel) {
     var showCreateAccount by remember { mutableStateOf(false) }
     val formError by authViewModel.formError.collectAsState()
     val isSubmitting by authViewModel.isSubmitting.collectAsState()
+    val passwordResetSent by authViewModel.passwordResetSent.collectAsState()
 
     if (showCreateAccount) {
         CreateAccountScreen(
@@ -89,9 +90,12 @@ private fun AuthFlow(authViewModel: AuthViewModel) {
         SignInScreen(
             formError = formError,
             isSubmitting = isSubmitting,
+            passwordResetSent = passwordResetSent,
             onSignIn = { email, password -> authViewModel.signIn(email, password) },
+            onForgotPassword = { email -> authViewModel.sendPasswordReset(email) },
             onNavigateToCreateAccount = {
                 authViewModel.clearFormError()
+                authViewModel.clearPasswordResetSent()
                 showCreateAccount = true
             }
         )

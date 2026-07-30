@@ -16,7 +16,7 @@ Package name: `week11.st695922.finalproject`
 
 ## What's implemented
 
-- **Firebase Authentication** — email/password sign in, sign up, sign out
+- **Firebase Authentication** — email/password sign in, sign up, sign out, and forgot-password (`sendPasswordResetEmail`)
 - **MVVM architecture** — Repository → ViewModel → Compose UI, with all Firebase calls isolated behind suspend functions
 - **Firestore CRUD** — a shared `stations` collection with real-time listeners, plus manual Check In / Check Out that updates live occupancy
 - **Per-user data** — home station preference and a check-in/check-out event log under `users/{uid}`, backing a live Alerts screen

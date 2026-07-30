@@ -42,13 +42,16 @@ import week11.st695922.finalproject.ui.theme.GoGreen
 fun SignInScreen(
     formError: String?,
     isSubmitting: Boolean,
+    passwordResetSent: Boolean,
     onSignIn: (email: String, password: String) -> Unit,
+    onForgotPassword: (email: String) -> Unit,
     onNavigateToCreateAccount: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var forgotPasswordNotice by remember { mutableStateOf(false) }
+    var showForgotPasswordField by remember { mutableStateOf(false) }
+    var resetEmail by remember { mutableStateOf("") }
 
     Column(
         modifier = modifier
@@ -99,21 +102,41 @@ fun SignInScreen(
                 .padding(top = 8.dp, bottom = 8.dp),
             horizontalArrangement = Arrangement.End
         ) {
-            // sendPasswordResetEmail is not covered by the course material
-            // (Week 5 only teaches sign up/in/out/delete). This shows a
-            // static notice instead of wiring a real reset email.
             ClickableText(
                 text = AnnotatedString("Forgot password?"),
                 style = MaterialTheme.typography.bodyMedium.copy(color = GoGreen, fontWeight = FontWeight.Medium),
-                onClick = { forgotPasswordNotice = true }
+                onClick = {
+                    resetEmail = email
+                    showForgotPasswordField = true
+                }
             )
         }
 
-        if (forgotPasswordNotice) {
-            ErrorBanner(
-                message = "Password reset isn't covered by the course material (Week 5 only covers sign up/in/out/delete). This is a placeholder.",
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
+        if (showForgotPasswordField) {
+            Column(modifier = Modifier.padding(bottom = 12.dp)) {
+                if (passwordResetSent) {
+                    Text(
+                        text = "Reset email sent to $resetEmail. Check your inbox.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = GoGreen,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                } else {
+                    LabeledTextField(
+                        label = "Email for password reset",
+                        value = resetEmail,
+                        onValueChange = { resetEmail = it },
+                        placeholder = "you@example.com"
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    PrimaryButton(
+                        text = "Send reset email",
+                        onClick = { onForgotPassword(resetEmail) },
+                        isLoading = isSubmitting,
+                        enabled = resetEmail.isNotBlank()
+                    )
+                }
+            }
         }
 
         formError?.let {
