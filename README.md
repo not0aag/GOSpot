@@ -35,8 +35,6 @@ This project is built against the material covered in a 9-week intro Android cou
 | Lot-full push alerts | No Firebase Cloud Messaging covered | Local UI toggle, not wired to real notifications |
 | Forgot password | Course covers sign up/in/out only, not `sendPasswordResetEmail` | Static placeholder notice |
 
-Each stub is marked in code with a comment explaining the gap. As later course material or instructor sign-off covers these APIs, they can replace the stubs without changing the surrounding architecture.
-
 ## Setup
 
 1. Clone the repo and open it in Android Studio.
