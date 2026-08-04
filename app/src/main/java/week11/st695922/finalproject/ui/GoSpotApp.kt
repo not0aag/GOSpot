@@ -45,6 +45,7 @@ import week11.st695922.finalproject.ui.state.UiState
 import week11.st695922.finalproject.viewmodel.AlertViewModel
 import week11.st695922.finalproject.viewmodel.AuthViewModel
 import week11.st695922.finalproject.viewmodel.LocationViewModel
+import week11.st695922.finalproject.viewmodel.MapViewModel
 import week11.st695922.finalproject.viewmodel.ProfileViewModel
 import week11.st695922.finalproject.viewmodel.StationViewModel
 
@@ -121,6 +122,7 @@ private fun MainAppFlow(uid: String, authViewModel: AuthViewModel) {
     val alertViewModel: AlertViewModel = viewModel(
         factory = viewModelFactory { initializer { AlertViewModel(uid) } }
     )
+    val mapViewModel: MapViewModel = viewModel()
     val locationViewModel: LocationViewModel = viewModel()
     LaunchedEffect(Unit) { locationViewModel.refreshLocation() }
     val userLocation by locationViewModel.lastLocation.collectAsState()
@@ -144,6 +146,7 @@ private fun MainAppFlow(uid: String, authViewModel: AuthViewModel) {
                     stationViewModel = stationViewModel,
                     profileViewModel = profileViewModel,
                     alertViewModel = alertViewModel,
+                    mapViewModel = mapViewModel,
                     profile = profile.data,
                     userLocation = userLocation,
                     onSignOut = { authViewModel.signOut() }
@@ -164,6 +167,7 @@ private fun SignedInApp(
     stationViewModel: StationViewModel,
     profileViewModel: ProfileViewModel,
     alertViewModel: AlertViewModel,
+    mapViewModel: MapViewModel,
     profile: UserProfile,
     userLocation: Location?,
     onSignOut: () -> Unit
@@ -236,9 +240,9 @@ private fun SignedInApp(
         ) {
             when (currentTab) {
                 Route.MainTab.Map -> MapScreen(
-                    stations = stations,
+                    mapViewModel = mapViewModel,
                     homeStation = stations.find { it.id == profile.homeStationId },
-                    onStationClick = { overlay = OverlayRoute.StationDetail(it.id) }
+                    userLocation = userLocation
                 )
                 Route.MainTab.Stations -> StationsListScreen(
                     stations = stations,
