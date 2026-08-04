@@ -2,7 +2,7 @@
 
 A live parking-availability companion for GO Transit commuters on the Lakeshore West line, built for a three-person final project (PROG39402 — Advanced Android).
 
-> **Step 2 status:** this repo currently implements Step 2's scope — Firebase Auth, MVVM architecture, and a first-draft Firestore CRUD feature. The full GOSpot vision (live interactive map, automatic geofence check-in, push notifications) is designed in the Figma mocks but intentionally **not** implemented yet — see [Scope of this build](#scope-of-this-build) below for why.
+> **Current status:** this repo implements Step 2's scope (Auth, MVVM, Firestore) and the core **Maps & Routing** features from Step 3. The geofencing and push notification components are designed and in active development.
 
 ## Team
 
@@ -16,6 +16,8 @@ Package name: `week11.st695922.finalproject`
 
 ## What's implemented
 
+- **Google Maps Integration (Step 3)** — Live interactive map using Google Maps SDK with real-time station markers color-coded by occupancy (Green/Orange/Red)
+- **Routing & Navigation (Step 3)** — Intent-based routing to the nearest or selected station with available parking
 - **Firebase Authentication** — email/password sign in, sign up, sign out, and forgot-password (`sendPasswordResetEmail`)
 - **MVVM architecture** — Repository → ViewModel → Compose UI, with all Firebase calls isolated behind suspend functions
 - **Firestore CRUD** — a shared `stations` collection with real-time listeners, plus manual Check In / Check Out that updates live occupancy
@@ -37,9 +39,9 @@ Features currently being refined or in active development as part of Step 3 (due
 
 | Feature | Current Status | Step 3 Deliverable |
 |---|---|---|
-| Live interactive map | Integrated (Step 3) | Full Google Maps SDK rendering with real-time station markers |
+| Live interactive map | Implemented (Step 3) | Full Google Maps SDK rendering with real-time station markers |
 | Automatic geofencing | Manual Stand-in | Background entry/exit detection via `GeofencingClient` |
-| Route/Navigation | In Progress | Intent-based routing to the nearest available station |
+| Route/Navigation | Implemented (Step 3) | Intent-based routing to the nearest available station |
 | Lot-full push alerts | Mocked | Firebase Cloud Messaging (FCM) integration |
 
 ## Setup
@@ -61,7 +63,7 @@ Features currently being refined or in active development as part of Step 3 (due
 app/src/main/java/week11/st695922/finalproject/
 ├── model/          Station, UserProfile, CheckInEvent
 ├── data/           Repositories - all Firebase calls live here
-├── viewmodel/      AuthViewModel, StationViewModel, ProfileViewModel, AlertViewModel, LocationViewModel
+├── viewmodel/      AuthViewModel, StationViewModel, ProfileViewModel, AlertViewModel, LocationViewModel, MapViewModel
 ├── ui/
 │   ├── state/      UiState / AuthUiState sealed wrappers
 │   ├── navigation/ Route sealed interface (state-driven screen switching)
