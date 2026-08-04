@@ -26,13 +26,21 @@ Package name: `week11.st695922.finalproject`
 
 ## Scope of this build
 
-This project is built against the material covered in a 9-week intro Android course (Firebase Auth, Firestore CRUD, MVVM, one-time location). The full GOSpot concept designed in Figma calls for a few things that course material doesn't cover yet:
+This project follows a 14-week Advanced Android Application Development timeline. This repository currently reflects **Step 2** of a 4-step final project plan:
 
-| Design feature | Why it's stubbed | What stands in for it |
+1.  **Step 1:** Project Proposal & Figma Prototype (Completed)
+2.  **Step 2:** Firebase Auth, MVVM Architecture, and Firestore CRUD (Completed - Current State)
+3.  **Step 3:** Maps & Routing — Advanced Topic Deliverables (In Progress)
+4.  **Step 4:** Final Presentation & Demo (Upcoming)
+
+Features currently being refined or in active development as part of Step 3 (due Week 13) include:
+
+| Feature | Current Status | Step 3 Deliverable |
 |---|---|---|
-| Live interactive map | No Google Maps SDK / `GoogleMap` composable covered | Static layout with placeholder pins |
-| Automatic geofence check-in | No `GeofencingClient` / background location covered | Manual Check In / Check Out button |
-| Lot-full push alerts | No Firebase Cloud Messaging covered | Local UI toggle, not wired to real notifications |
+| Live interactive map | Integrated (Step 3) | Full Google Maps SDK rendering with real-time station markers |
+| Automatic geofencing | Manual Stand-in | Background entry/exit detection via `GeofencingClient` |
+| Route/Navigation | In Progress | Intent-based routing to the nearest available station |
+| Lot-full push alerts | Mocked | Firebase Cloud Messaging (FCM) integration |
 
 ## Setup
 
@@ -41,7 +49,11 @@ This project is built against the material covered in a 9-week intro Android cou
 3. Download `google-services.json` and place it at `app/google-services.json` (it's gitignored — every developer needs their own copy or a shared one passed outside of git).
 4. In the Firebase console, enable **Authentication → Sign-in method → Email/Password** and create a **Firestore Database** (Standard edition, test-mode rules to start).
 5. Publish `firestore.rules` from this repo to the Firestore **Rules** tab.
-6. Run the app. On first launch, use the "Load demo stations" button (shown when the stations list is empty) to seed the six Lakeshore West lots with the capacities/occupancy from the Figma mocks.
+6. **Google Maps API Key**:
+   - Open [local.properties](local.properties) in the root directory.
+   - Add the following line: `MAPS_API_KEY=your_api_key_here`
+   - The project uses the `secrets-gradle-plugin` to safely inject this key into the manifest without pushing it to GitHub.
+7. Run the app. On first launch, use the "Load demo stations" button (shown when the stations list is empty) to seed the six Lakeshore West lots with the capacities/occupancy from the Figma mocks.
 
 ## Project structure
 
