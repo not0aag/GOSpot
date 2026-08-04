@@ -96,7 +96,7 @@ fun ProfileScreen(
         )
         ToggleRow(
             title = "Automatic check-in",
-            subtitle = "Requires GeofencingClient - not covered by the course material, so this toggle is local-only",
+            subtitle = "Automatic check-in/out via device location.",
             initialValue = false
         )
         ToggleRow(

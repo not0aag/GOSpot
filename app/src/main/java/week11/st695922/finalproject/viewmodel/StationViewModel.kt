@@ -21,8 +21,8 @@ class StationViewModel @JvmOverloads constructor(
 ) : ViewModel() {
 
     /**
-     * `stateIn`'s initialValue supplies the Loading case; once the repository's
-     * snapshot listener (Week 4.1, Slides 2, 8) emits its first snapshot, this
+     * Supplies the initial Loading case; once the repository's
+     * snapshot listener emits its first snapshot, this
      * flips to Success and stays there for every subsequent real-time update.
      */
     val stationsState: StateFlow<UiState<List<Station>>> = repository.stationsFlow()
@@ -38,8 +38,7 @@ class StationViewModel @JvmOverloads constructor(
     /**
      * Tracks which stations *this device* has manually checked into, so the
      * Stations list can show "Check out" instead of "Check in". This is local
-     * UI state only, not a Firestore field - there's no session/geofence
-     * concept without GeofencingClient (not covered by the course material).
+     * UI state only, not a Firestore field.
      */
     private val _checkedInStationIds = MutableStateFlow<Set<String>>(emptySet())
     val checkedInStationIds: StateFlow<Set<String>> = _checkedInStationIds.asStateFlow()

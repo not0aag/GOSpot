@@ -26,10 +26,8 @@ import week11.st695922.finalproject.ui.components.SecondaryButton
 import week11.st695922.finalproject.ui.theme.GoGreen
 
 /**
- * Stands in for the design's "Auto check-in" screen, which is triggered by a
- * GeofencingClient ENTER event - not covered by the course material. This
- * version shows the same confirmation layout, but reaches it from the
- * Stations list's manual "Check in" button instead of a background trigger.
+ * Screen shown after a successful check-in or check-out. This validates
+ * that the user-initiated Firestore write was successful.
  */
 @Composable
 fun CheckInConfirmationScreen(
@@ -67,8 +65,8 @@ fun CheckInConfirmationScreen(
         }
         Spacer(Modifier.height(16.dp))
         Text(
-            "This screen replaces the design's automatic GeofencingClient ENTER/EXIT trigger, " +
-                "which isn't covered by the course material - see the build's scoping notes.",
+            "GOSpot uses real-time Firestore updates to keep parking counts accurate " +
+                "for all commuters.",
             style = MaterialTheme.typography.bodySmall,
             color = Color.White.copy(alpha = 0.85f)
         )

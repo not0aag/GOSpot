@@ -13,11 +13,7 @@ import kotlin.coroutines.resume
 /**
  * Repository for the shared `stations` collection.
  *
- * The course material wires `addSnapshotListener` straight into a Composable's
- * DisposableEffect (Week 4.1, Slides 2, 8). To honor the MVVM rule that Compose
- * UI never touches Firebase directly (Week 6.1, Slide 6), this repository wraps
- * that same listener in a callbackFlow instead — same underlying API, just
- * exposed as a Flow the ViewModel can turn into a StateFlow.
+ * Wraps Firestore snapshot listeners in a Flow for use within ViewModels.
  */
 class StationRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
@@ -38,9 +34,8 @@ class StationRepository(
 
     /**
      * Manual check-in: this stands in for the design's automatic geofence
-     * ENTER trigger, which needs GeofencingClient — not covered by the course
-     * material (see scoping note). Reads the current count, computes the new
-     * value in Kotlin, then writes only that one field (Week 4.1, Slide 10-11).
+     * ENTER trigger. Reads the current count, computes the new
+     * value in Kotlin, then writes only that one field.
      */
     suspend fun checkIn(station: Station): Result<Unit> = updateOccupancy(
         station = station,
