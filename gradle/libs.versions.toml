@@ -12,8 +12,8 @@ composeBom = "2026.02.01"
 googleServices = "4.4.2"
 firebaseBom = "34.3.0"
 playServicesLocation = "21.3.0"
-mapsCompose = "8.4.0"
-playServicesMaps = "20.0.0"
+mapsCompose = "6.4.4"
+playServicesMaps = "19.0.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
