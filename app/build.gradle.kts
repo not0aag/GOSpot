@@ -58,6 +58,10 @@ dependencies {
     // FusedLocationProviderClient (Week 8, Slides 14, 23, 26)
     implementation(libs.play.services.location)
 
+    // Google Maps SDK & Compose (Step 3)
+    implementation(libs.play.services.maps)
+    implementation(libs.maps.compose)
+
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
