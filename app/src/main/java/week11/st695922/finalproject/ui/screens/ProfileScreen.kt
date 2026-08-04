@@ -70,7 +70,7 @@ fun ProfileScreen(
                 Column(modifier = Modifier.padding(start = 12.dp)) {
                     Text(profile.fullName.ifBlank { profile.email }, fontWeight = FontWeight.Bold)
                     Text(
-                        "Signed in with Firebase Auth",
+                        "Signed in with Firebase",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -80,15 +80,15 @@ fun ProfileScreen(
 
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            StatCard(value = "$checkInsCount", label = "check-ins recorded", modifier = Modifier.weight(1f))
+            StatCard(value = "$checkInsCount", label = "Check-ins recorded", modifier = Modifier.weight(1f))
             StatCard(
                 value = profile.homeStationName.ifBlank { "-" },
-                label = "home station",
+                label = "Home station",
                 modifier = Modifier.weight(1f)
             )
         }
 
-        SectionLabel("PARKING")
+        SectionLabel("Parking")
         SettingsRow(
             title = "Home station",
             subtitle = profile.homeStationName.ifBlank { "Not set" },
@@ -105,10 +105,10 @@ fun ProfileScreen(
             initialValue = true
         )
 
-        SectionLabel("ALERTS")
+        SectionLabel("Alerts")
         ToggleRow(
             title = "Lot filling up alerts",
-            subtitle = "Push notifications need Firebase Cloud Messaging - not covered, local-only toggle",
+            subtitle = "Get notified when your home station lot is near capacity.",
             initialValue = false
         )
 
@@ -137,9 +137,10 @@ private fun StatCard(value: String, label: String, modifier: Modifier = Modifier
 private fun SectionLabel(text: String) {
     Text(
         text,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = 20.dp, bottom = 8.dp)
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)
     )
 }
 
