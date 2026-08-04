@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -65,8 +66,11 @@ fun MapScreen(
             onMapClick = { mapViewModel.selectStation(null) }
         ) {
             stations.forEach { station ->
+                val markerState = remember(station.id) {
+                    MarkerState(position = LatLng(station.lat, station.lng))
+                }
                 Marker(
-                    state = MarkerState(position = LatLng(station.lat, station.lng)),
+                    state = markerState,
                     title = station.name,
                     icon = BitmapDescriptorFactory.defaultMarker(
                         when (occupancyColor(station.percentFull)) {
