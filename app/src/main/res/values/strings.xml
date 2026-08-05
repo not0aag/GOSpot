@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">GOSpot</string>
+
+    <!-- Cloud Messaging channel for "lot filling up" alerts. The id is also
+         referenced from AndroidManifest.xml so FCM notification messages sent
+         from the server land in this channel instead of a default one. -->
+    <string name="alert_channel_id">gospot_lot_alerts</string>
+    <string name="alert_channel_name">Lot filling up</string>
+    <string name="alert_channel_description">Warns you when your home station lot is near capacity and suggests a nearby lot with room.</string>
 </resources>

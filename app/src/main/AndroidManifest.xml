@@ -9,6 +9,10 @@
 
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
+    <!-- Runtime permission for lot-filling alerts. minSdk is 36, so this is
+         always a runtime request - there is no pre-Android-13 path. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -38,6 +42,23 @@
         <receiver
             android:name=".receiver.GeofenceBroadcastReceiver"
             android:exported="false" />
+
+        <service
+            android:name=".service.GoSpotMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Without this, notification messages sent from the server land in a
+             default channel rather than the one AlertNotifier creates. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="@string/alert_channel_id" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
     </application>
 
 </manifest>

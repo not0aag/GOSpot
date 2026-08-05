@@ -9,5 +9,12 @@ data class UserProfile(
     val fullName: String = "",
     val email: String = "",
     val homeStationId: String = "",
-    val homeStationName: String = ""
+    val homeStationName: String = "",
+    /** Whether this user wants "lot filling up" alerts for their home station. */
+    val alertsEnabled: Boolean = false,
+    /**
+     * This device's FCM registration token. Stored so alerts can later be sent
+     * to a specific device rather than fanned out over a station topic.
+     */
+    val fcmToken: String = ""
 )

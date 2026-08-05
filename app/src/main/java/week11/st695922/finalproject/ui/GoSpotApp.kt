@@ -1,6 +1,7 @@
 package week11.st695922.finalproject.ui
 
 import android.Manifest
+import android.app.Application
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
@@ -43,6 +44,7 @@ import week11.st695922.finalproject.ui.screens.StationDetailScreen
 import week11.st695922.finalproject.ui.screens.StationsListScreen
 import week11.st695922.finalproject.ui.state.AuthUiState
 import week11.st695922.finalproject.ui.state.UiState
+import week11.st695922.finalproject.viewmodel.AlertSettingsViewModel
 import week11.st695922.finalproject.viewmodel.AlertViewModel
 import week11.st695922.finalproject.viewmodel.AuthViewModel
 import week11.st695922.finalproject.viewmodel.GeofenceViewModel
@@ -160,6 +162,7 @@ private fun MainAppFlow(uid: String, authViewModel: AuthViewModel) {
                 )
             } else {
                 SignedInApp(
+                    uid = uid,
                     stationViewModel = stationViewModel,
                     profileViewModel = profileViewModel,
                     alertViewModel = alertViewModel,
@@ -181,6 +184,7 @@ private sealed interface OverlayRoute {
 
 @Composable
 private fun SignedInApp(
+    uid: String,
     stationViewModel: StationViewModel,
     profileViewModel: ProfileViewModel,
     alertViewModel: AlertViewModel,
@@ -191,6 +195,13 @@ private fun SignedInApp(
 ) {
     var currentTab by remember { mutableStateOf<Route.MainTab>(Route.MainTab.Map) }
     var overlay by remember { mutableStateOf<OverlayRoute?>(null) }
+
+    val application = LocalContext.current.applicationContext as Application
+    val alertSettingsViewModel: AlertSettingsViewModel = viewModel(
+        factory = viewModelFactory { initializer { AlertSettingsViewModel(uid, application) } }
+    )
+    val alertsEnabled by alertSettingsViewModel.alertsEnabled.collectAsState()
+    LaunchedEffect(uid) { alertSettingsViewModel.syncFcmToken() }
 
     val stationsState by stationViewModel.stationsState.collectAsState()
     val checkedInIds by stationViewModel.checkedInStationIds.collectAsState()
@@ -279,6 +290,8 @@ private fun SignedInApp(
                     checkInsCount = (eventsState as? UiState.Success)?.data
                         ?.count { it.type == CheckInEventType.CHECK_IN.name }
                         ?: 0,
+                    alertsEnabled = alertsEnabled,
+                    onAlertsEnabledChange = { alertSettingsViewModel.setAlertsEnabled(it) },
                     onChangeHomeStation = { overlay = OverlayRoute.ChangeHomeStation },
                     onSignOut = onSignOut
                 )
