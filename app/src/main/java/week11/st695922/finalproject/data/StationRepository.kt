@@ -33,6 +33,18 @@ class StationRepository(
     }
 
 
+    suspend fun resetAllOccupancy(): Result<Unit> = suspendCancellableCoroutine { cont ->
+        stationsRef.get()
+            .addOnSuccessListener { snapshot ->
+                val batch = firestore.batch()
+                snapshot.documents.forEach { doc -> batch.update(doc.reference, "currentOccupancy", 0) }
+                batch.commit()
+                    .addOnSuccessListener { cont.resume(Result.success(Unit)) }
+                    .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
+            }
+            .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
+    }
+
     suspend fun checkIn(station: Station): Result<Unit> = updateOccupancy(
         station = station,
         newOccupancy = (station.currentOccupancy + 1).coerceAtMost(station.capacityTotal),
