@@ -39,6 +39,8 @@ import week11.st695922.finalproject.ui.theme.GoGreen
 fun ProfileScreen(
     profile: UserProfile,
     checkInsCount: Int,
+    alertsEnabled: Boolean,
+    onAlertsEnabledChange: (Boolean) -> Unit,
     onChangeHomeStation: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier
@@ -108,8 +110,14 @@ fun ProfileScreen(
         SectionLabel("Alerts")
         ToggleRow(
             title = "Lot filling up alerts",
-            subtitle = "Get notified when your home station lot is near capacity.",
-            initialValue = false
+            subtitle = if (profile.homeStationName.isBlank()) {
+                "Set a home station first."
+            } else {
+                "Get notified when ${profile.homeStationName} is near capacity."
+            },
+            checked = alertsEnabled,
+            onCheckedChange = onAlertsEnabledChange,
+            enabled = profile.homeStationId.isNotBlank()
         )
 
         Spacer(Modifier.height(24.dp))
@@ -161,10 +169,28 @@ private fun SettingsRow(title: String, subtitle: String, trailing: @Composable (
     }
 }
 
+/** Self-managed toggle, for rows that are not yet backed by stored state. */
 @Composable
 private fun ToggleRow(title: String, subtitle: String, initialValue: Boolean) {
     var checked by remember { mutableStateOf(initialValue) }
+    ToggleRow(
+        title = title,
+        subtitle = subtitle,
+        checked = checked,
+        onCheckedChange = { checked = it }
+    )
+}
+
+/** Controlled toggle, for rows whose state lives in a ViewModel. */
+@Composable
+private fun ToggleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true
+) {
     SettingsRow(title = title, subtitle = subtitle) {
-        Switch(checked = checked, onCheckedChange = { checked = it })
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }

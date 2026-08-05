@@ -25,14 +25,26 @@ class UserProfileRepository(
     }
 
     suspend fun setHomeStation(uid: String, station: Station): Result<Unit> =
+        updateFields(
+            uid,
+            mapOf(
+                "homeStationId" to station.id,
+                "homeStationName" to station.name
+            )
+        )
+
+    /** Opt-in flag for "lot filling up" alerts on the user's home station. */
+    suspend fun setAlertsEnabled(uid: String, enabled: Boolean): Result<Unit> =
+        updateFields(uid, mapOf("alertsEnabled" to enabled))
+
+    /** Persists this device's FCM registration token onto the profile. */
+    suspend fun setFcmToken(uid: String, token: String): Result<Unit> =
+        updateFields(uid, mapOf("fcmToken" to token))
+
+    private suspend fun updateFields(uid: String, fields: Map<String, Any>): Result<Unit> =
         suspendCancellableCoroutine { cont ->
             firestore.collection("users").document(uid)
-                .update(
-                    mapOf(
-                        "homeStationId" to station.id,
-                        "homeStationName" to station.name
-                    )
-                )
+                .update(fields)
                 .addOnSuccessListener { cont.resume(Result.success(Unit)) }
                 .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
         }
