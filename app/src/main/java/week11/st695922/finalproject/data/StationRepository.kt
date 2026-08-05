@@ -32,11 +32,7 @@ class StationRepository(
         awaitClose { listener.remove() }
     }
 
-    /**
-     * Manual check-in: this stands in for the design's automatic geofence
-     * ENTER trigger. Reads the current count, computes the new
-     * value in Kotlin, then writes only that one field.
-     */
+
     suspend fun checkIn(station: Station): Result<Unit> = updateOccupancy(
         station = station,
         newOccupancy = (station.currentOccupancy + 1).coerceAtMost(station.capacityTotal),
@@ -48,6 +44,36 @@ class StationRepository(
         newOccupancy = (station.currentOccupancy - 1).coerceAtLeast(0),
         eventType = CheckInEventType.CHECK_OUT
     )
+
+    suspend fun checkInByStationId(stationId: String): Result<Unit> =
+        updateOccupancyByStationId(stationId, delta = 1, eventType = CheckInEventType.CHECK_IN)
+
+    suspend fun checkOutByStationId(stationId: String): Result<Unit> =
+        updateOccupancyByStationId(stationId, delta = -1, eventType = CheckInEventType.CHECK_OUT)
+
+    private suspend fun updateOccupancyByStationId(
+        stationId: String,
+        delta: Int,
+        eventType: CheckInEventType
+    ): Result<Unit> {
+        val station = fetchStation(stationId).getOrElse { return Result.failure(it) }
+        val newOccupancy = (station.currentOccupancy + delta).coerceIn(0, station.capacityTotal)
+        return updateOccupancy(station, newOccupancy, eventType)
+    }
+
+    private suspend fun fetchStation(stationId: String): Result<Station> =
+        suspendCancellableCoroutine { cont ->
+            stationsRef.document(stationId).get()
+                .addOnSuccessListener { doc ->
+                    val station = doc.toObject(Station::class.java)?.copy(id = doc.id)
+                    if (station != null) {
+                        cont.resume(Result.success(station))
+                    } else {
+                        cont.resume(Result.failure(IllegalStateException("Station $stationId not found")))
+                    }
+                }
+                .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
+        }
 
     private suspend fun updateOccupancy(
         station: Station,
@@ -67,12 +93,7 @@ class StationRepository(
     }
 }
 
-/**
- * Writes the `users/{uid}/events/{eventId}` documents that back the Alerts
- * screen. Kept separate from [StationRepository] since it targets a different
- * collection path, but called from there right after a successful occupancy
- * update so every manual check-in/out produces a real Firestore-backed alert.
- */
+
 class CheckInEventRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val authRepository: AuthRepository = AuthRepository()
