@@ -46,34 +46,31 @@ class StationRepository(
     )
 
     suspend fun checkInByStationId(stationId: String): Result<Unit> =
-        updateOccupancyByStationId(stationId, delta = 1, eventType = CheckInEventType.CHECK_IN)
+        updateOccupancyByStationIdAtomic(stationId, delta = 1, eventType = CheckInEventType.CHECK_IN)
 
     suspend fun checkOutByStationId(stationId: String): Result<Unit> =
-        updateOccupancyByStationId(stationId, delta = -1, eventType = CheckInEventType.CHECK_OUT)
+        updateOccupancyByStationIdAtomic(stationId, delta = -1, eventType = CheckInEventType.CHECK_OUT)
 
-    private suspend fun updateOccupancyByStationId(
+    private suspend fun updateOccupancyByStationIdAtomic(
         stationId: String,
         delta: Int,
         eventType: CheckInEventType
     ): Result<Unit> {
-        val station = fetchStation(stationId).getOrElse { return Result.failure(it) }
-        val newOccupancy = (station.currentOccupancy + delta).coerceIn(0, station.capacityTotal)
-        return updateOccupancy(station, newOccupancy, eventType)
-    }
-
-    private suspend fun fetchStation(stationId: String): Result<Station> =
-        suspendCancellableCoroutine { cont ->
-            stationsRef.document(stationId).get()
-                .addOnSuccessListener { doc ->
-                    val station = doc.toObject(Station::class.java)?.copy(id = doc.id)
-                    if (station != null) {
-                        cont.resume(Result.success(station))
-                    } else {
-                        cont.resume(Result.failure(IllegalStateException("Station $stationId not found")))
-                    }
-                }
+        val stationRef = stationsRef.document(stationId)
+        val txResult = suspendCancellableCoroutine<Result<Station>> { cont ->
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(stationRef)
+                val station = snapshot.toObject(Station::class.java)?.copy(id = snapshot.id)
+                    ?: throw IllegalStateException("Station $stationId not found")
+                val newOccupancy = (station.currentOccupancy + delta).coerceIn(0, station.capacityTotal)
+                transaction.update(stationRef, "currentOccupancy", newOccupancy)
+                station
+            }.addOnSuccessListener { station -> cont.resume(Result.success(station)) }
                 .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
         }
+        txResult.onSuccess { station -> eventsRepository.recordEvent(station, eventType, auto = true) }
+        return txResult.map { }
+    }
 
     private suspend fun updateOccupancy(
         station: Station,
@@ -98,13 +95,14 @@ class CheckInEventRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val authRepository: AuthRepository = AuthRepository()
 ) {
-    fun recordEvent(station: Station, type: CheckInEventType) {
+    fun recordEvent(station: Station, type: CheckInEventType, auto: Boolean = false) {
         val uid = authRepository.currentUserId ?: return
         val event = CheckInEvent(
             stationId = station.id,
             stationName = station.name,
             type = type.name,
-            timestampMillis = System.currentTimeMillis()
+            timestampMillis = System.currentTimeMillis(),
+            auto = auto
         )
         firestore.collection("users").document(uid).collection("events").add(event)
     }
