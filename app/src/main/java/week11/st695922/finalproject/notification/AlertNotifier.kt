@@ -13,6 +13,8 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import week11.st695922.finalproject.MainActivity
 import week11.st695922.finalproject.R
+import week11.st695922.finalproject.model.AlertPolicy
+import week11.st695922.finalproject.model.Station
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -40,6 +42,22 @@ object AlertNotifier {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager?.createNotificationChannel(channel)
     }
+
+    /**
+     * Convenience overload for the on-device watcher, which holds the station
+     * documents themselves and can therefore also report how far the suggested
+     * alternate is.
+     */
+    fun postLotFillingAlert(context: Context, homeStation: Station, alternate: Station?): Boolean =
+        postLotFillingAlert(
+            context = context,
+            stationId = homeStation.id,
+            stationName = homeStation.name,
+            percentFull = homeStation.percentFull,
+            alternateName = alternate?.name,
+            alternateSpacesFree = alternate?.spacesFree,
+            alternateDistanceKm = alternate?.let { AlertPolicy.distanceKm(homeStation, it) }
+        )
 
     /**
      * Posts the "lot filling up" alert.

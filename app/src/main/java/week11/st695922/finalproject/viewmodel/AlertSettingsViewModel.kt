@@ -8,13 +8,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import week11.st695922.finalproject.data.AlertRepository
+import week11.st695922.finalproject.data.StationRepository
 import week11.st695922.finalproject.data.UserProfileRepository
+import week11.st695922.finalproject.model.AlertPolicy
+import week11.st695922.finalproject.model.Station
 import week11.st695922.finalproject.model.UserProfile
+import week11.st695922.finalproject.notification.AlertNotifier
 
 /**
  * Owns the "Lot filling up alerts" setting.
@@ -35,7 +40,8 @@ class AlertSettingsViewModel(
     private val uid: String,
     application: Application,
     private val alertRepository: AlertRepository = AlertRepository(),
-    private val profileRepository: UserProfileRepository = UserProfileRepository()
+    private val profileRepository: UserProfileRepository = UserProfileRepository(),
+    private val stationRepository: StationRepository = StationRepository()
 ) : AndroidViewModel(application) {
 
     private val profile: StateFlow<UserProfile?> = profileRepository.profileFlow(uid)
@@ -55,9 +61,30 @@ class AlertSettingsViewModel(
      */
     private var subscribedStationId: String? = null
 
+    /**
+     * Stations already alerted on since they last crossed the threshold.
+     *
+     * Firestore snapshot listeners re-emit on every write, so without this a
+     * busy lot would notify again on each individual check-in. A station is
+     * removed once it drops back under the threshold, re-arming the alert.
+     *
+     * In-memory deliberately: the alert is about a live crossing, so a fresh
+     * process legitimately re-evaluates against current occupancy.
+     */
+    private val alertedStationIds = mutableSetOf<String>()
+
     init {
         viewModelScope.launch {
             profile.filterNotNull().collect { reconcileSubscription(it) }
+        }
+        viewModelScope.launch {
+            combine(
+                profile.filterNotNull(),
+                stationRepository.stationsFlow()
+            ) { currentProfile, stations -> currentProfile to stations }
+                .collect { (currentProfile, stations) ->
+                    evaluateThreshold(currentProfile, stations)
+                }
         }
     }
 
@@ -75,6 +102,35 @@ class AlertSettingsViewModel(
 
     fun clearActionError() {
         _actionError.value = null
+    }
+
+    /**
+     * Fires the local "lot filling up" notification when the user's home
+     * station crosses [AlertPolicy.THRESHOLD_PERCENT].
+     *
+     * This is the on-device half of the alert path: it needs no server and no
+     * billing, and it fires off exactly the same [AlertPolicy] decision a
+     * Cloud Function would make.
+     */
+    private fun evaluateThreshold(profile: UserProfile, stations: List<Station>) {
+        val home = stations.find { it.id == profile.homeStationId } ?: return
+
+        if (!AlertPolicy.isOverThreshold(home)) {
+            // Back under the threshold - re-arm so the next crossing alerts.
+            alertedStationIds.remove(home.id)
+            return
+        }
+
+        if (!profile.alertsEnabled) return
+        if (home.id in alertedStationIds) return
+
+        val posted = AlertNotifier.postLotFillingAlert(
+            context = getApplication(),
+            homeStation = home,
+            alternate = AlertPolicy.suggestAlternate(home, stations)
+        )
+        // Only latch on a real post, so granting the permission later still alerts.
+        if (posted) alertedStationIds.add(home.id)
     }
 
     /** Brings the device's topic subscription in line with the stored profile. */
