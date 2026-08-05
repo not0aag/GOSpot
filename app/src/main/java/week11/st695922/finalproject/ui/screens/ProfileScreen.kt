@@ -1,5 +1,8 @@
 package week11.st695922.finalproject.ui.screens
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,9 +33,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import week11.st695922.finalproject.model.UserProfile
+import week11.st695922.finalproject.ui.hasNotificationPermission
 import week11.st695922.finalproject.ui.theme.GoGreen
 
 @Composable
@@ -108,16 +114,11 @@ fun ProfileScreen(
         )
 
         SectionLabel("Alerts")
-        ToggleRow(
-            title = "Lot filling up alerts",
-            subtitle = if (profile.homeStationName.isBlank()) {
-                "Set a home station first."
-            } else {
-                "Get notified when ${profile.homeStationName} is near capacity."
-            },
-            checked = alertsEnabled,
-            onCheckedChange = onAlertsEnabledChange,
-            enabled = profile.homeStationId.isNotBlank()
+        AlertsToggle(
+            homeStationName = profile.homeStationName,
+            hasHomeStation = profile.homeStationId.isNotBlank(),
+            alertsEnabled = alertsEnabled,
+            onAlertsEnabledChange = onAlertsEnabledChange
         )
 
         Spacer(Modifier.height(24.dp))
@@ -125,6 +126,77 @@ fun ProfileScreen(
             Text("Sign out", color = MaterialTheme.colorScheme.error)
         }
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+/**
+ * The "Lot filling up alerts" opt-in.
+ *
+ * POST_NOTIFICATIONS is requested here, at the moment the user asks for
+ * alerts, rather than as an onboarding gate - the prompt lands with obvious
+ * context, and the onboarding flow (which the geofencing work owns) is left
+ * alone.
+ *
+ * The launcher has to be registered from a composable because that is what the
+ * Activity Result API requires, but it only reports a boolean: the actual
+ * subscribe and persist still go through AlertSettingsViewModel.
+ */
+@Composable
+private fun AlertsToggle(
+    homeStationName: String,
+    hasHomeStation: Boolean,
+    alertsEnabled: Boolean,
+    onAlertsEnabledChange: (Boolean) -> Unit
+) {
+    val context = LocalContext.current
+    var hasPermission by remember { mutableStateOf(hasNotificationPermission(context)) }
+    var justDenied by remember { mutableStateOf(false) }
+
+    // Catches the user granting or revoking notifications in system settings
+    // while the app was in the background.
+    LifecycleResumeEffect(Unit) {
+        hasPermission = hasNotificationPermission(context)
+        onPauseOrDispose { }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasPermission = granted
+        justDenied = !granted
+        if (granted) onAlertsEnabledChange(true)
+    }
+
+    // Alerts stored as on but with notifications blocked cannot actually
+    // arrive, so the switch reflects the effective state, not just the flag.
+    val effectivelyOn = alertsEnabled && hasPermission
+
+    ToggleRow(
+        title = "Lot filling up alerts",
+        subtitle = if (!hasHomeStation) {
+            "Set a home station first."
+        } else {
+            "Get notified when $homeStationName is near capacity."
+        },
+        checked = effectivelyOn,
+        onCheckedChange = { wantsOn ->
+            justDenied = false
+            when {
+                !wantsOn -> onAlertsEnabledChange(false)
+                hasPermission -> onAlertsEnabledChange(true)
+                else -> permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        },
+        enabled = hasHomeStation
+    )
+
+    if (hasHomeStation && !hasPermission && (justDenied || alertsEnabled)) {
+        Text(
+            "Notifications are turned off for GOSpot. Enable them in Settings to get lot alerts.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
     }
 }
 
