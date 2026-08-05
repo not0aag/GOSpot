@@ -3,6 +3,13 @@ package week11.st695922.finalproject.service
 import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import week11.st695922.finalproject.data.AuthRepository
+import week11.st695922.finalproject.data.UserProfileRepository
 import week11.st695922.finalproject.notification.AlertNotifier
 
 /**
@@ -19,6 +26,16 @@ import week11.st695922.finalproject.notification.AlertNotifier
  * directly. Data-only messages always come through here.
  */
 class GoSpotMessagingService : FirebaseMessagingService() {
+
+    private val authRepository = AuthRepository()
+    private val profileRepository = UserProfileRepository()
+
+    /**
+     * Service callbacks are not coroutine contexts, so token persistence runs
+     * on a scope of its own - the same approach GeofenceBroadcastReceiver uses
+     * for its Firestore writes.
+     */
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
@@ -46,10 +63,26 @@ class GoSpotMessagingService : FirebaseMessagingService() {
 
     /**
      * Fired when FCM issues or rotates this device's registration token.
-     * Persisting it to the user's profile is wired up in a later step.
+     *
+     * A token can be issued before anyone signs in, in which case there is no
+     * profile to write to; AlertSettingsViewModel.syncFcmToken covers that case
+     * on the next sign-in.
      */
     override fun onNewToken(token: String) {
-        Log.d(TAG, "FCM registration token refreshed")
+        val uid = authRepository.currentUserId
+        if (uid == null) {
+            Log.d(TAG, "Token refreshed while signed out; will sync at next sign-in")
+            return
+        }
+        serviceScope.launch {
+            profileRepository.setFcmToken(uid, token)
+                .onFailure { e -> Log.e(TAG, "Could not persist FCM token", e) }
+        }
+    }
+
+    override fun onDestroy() {
+        serviceScope.cancel()
+        super.onDestroy()
     }
 
     companion object {

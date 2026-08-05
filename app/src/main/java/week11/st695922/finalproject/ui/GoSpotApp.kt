@@ -201,6 +201,7 @@ private fun SignedInApp(
         factory = viewModelFactory { initializer { AlertSettingsViewModel(uid, application) } }
     )
     val alertsEnabled by alertSettingsViewModel.alertsEnabled.collectAsState()
+    LaunchedEffect(uid) { alertSettingsViewModel.syncFcmToken() }
 
     val stationsState by stationViewModel.stationsState.collectAsState()
     val checkedInIds by stationViewModel.checkedInStationIds.collectAsState()

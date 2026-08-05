@@ -105,6 +105,28 @@ class AlertSettingsViewModel(
     }
 
     /**
+     * Copies this device's FCM registration token onto the user's profile.
+     *
+     * GoSpotMessagingService.onNewToken cannot cover the common case where FCM
+     * issued the token before anyone signed in, so this runs once the user is
+     * authenticated. Storing the token means alerts can later be addressed to
+     * a specific device instead of fanned out over a station topic.
+     */
+    fun syncFcmToken() {
+        viewModelScope.launch {
+            val token = alertRepository.currentToken()
+                .onFailure { e -> Log.w(TAG, "Could not read FCM token", e) }
+                .getOrNull()
+                ?: return@launch
+
+            if (token.isBlank() || token == profile.value?.fcmToken) return@launch
+
+            profileRepository.setFcmToken(uid, token)
+                .onFailure { e -> Log.w(TAG, "Could not store FCM token", e) }
+        }
+    }
+
+    /**
      * Fires the local "lot filling up" notification when the user's home
      * station crosses [AlertPolicy.THRESHOLD_PERCENT].
      *
