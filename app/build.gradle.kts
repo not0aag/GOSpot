@@ -56,6 +56,9 @@ dependencies {
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
 
+    // Firebase Cloud Messaging - lot-filling push alerts (Step 4)
+    implementation(libs.firebase.messaging)
+
     // FusedLocationProviderClient (Week 8, Slides 14, 23, 26)
     implementation(libs.play.services.location)
 
