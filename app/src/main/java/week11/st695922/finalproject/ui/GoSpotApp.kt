@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
+import android.os.Build
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -44,6 +45,7 @@ import week11.st695922.finalproject.ui.state.AuthUiState
 import week11.st695922.finalproject.ui.state.UiState
 import week11.st695922.finalproject.viewmodel.AlertViewModel
 import week11.st695922.finalproject.viewmodel.AuthViewModel
+import week11.st695922.finalproject.viewmodel.GeofenceViewModel
 import week11.st695922.finalproject.viewmodel.LocationViewModel
 import week11.st695922.finalproject.viewmodel.MapViewModel
 import week11.st695922.finalproject.viewmodel.ProfileViewModel
@@ -53,12 +55,16 @@ private fun hasLocationPermission(context: Context): Boolean =
     ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED
 
-/**
- * Root composable. Screen switching follows the state-driven pattern from
- * Week 6.2 Slide 11: this `when` block on AuthUiState decides whether to show
- * the auth flow or the signed-in app, generalized with the Route sealed class
- * (ui/navigation/Route.kt) for the screens inside the signed-in app.
- */
+
+private fun hasBackgroundLocationPermission(context: Context): Boolean =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+    } else {
+        true
+    }
+
+
 @Composable
 fun GoSpotApp() {
     val authViewModel: AuthViewModel = viewModel()
@@ -129,6 +135,17 @@ private fun MainAppFlow(uid: String, authViewModel: AuthViewModel) {
 
     val stationsState by stationViewModel.stationsState.collectAsState()
     val profileState by profileViewModel.profileState.collectAsState()
+
+    val geofenceViewModel: GeofenceViewModel = viewModel()
+    val stationsForGeofencing = (stationsState as? UiState.Success)?.data ?: emptyList()
+    LaunchedEffect(stationsForGeofencing.map { it.id }) {
+        if (stationsForGeofencing.isNotEmpty() &&
+            hasLocationPermission(context) &&
+            hasBackgroundLocationPermission(context)
+        ) {
+            geofenceViewModel.registerGeofences(stationsForGeofencing)
+        }
+    }
 
     when (val profile = profileState) {
         is UiState.Loading -> FullScreenLoading()

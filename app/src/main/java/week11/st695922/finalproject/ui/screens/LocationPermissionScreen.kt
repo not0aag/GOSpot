@@ -1,6 +1,7 @@
 package week11.st695922.finalproject.ui.screens
 
 import android.Manifest
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -24,6 +25,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,21 +41,95 @@ import week11.st695922.finalproject.ui.components.PrimaryButton
 import week11.st695922.finalproject.ui.theme.GoGreen
 import week11.st695922.finalproject.ui.theme.GoGreenContainer
 
-/**
- * Matches the "Allow location all the time" mock, but the button underneath
- * only requests foreground ACCESS_FINE_LOCATION (Week 8, Slides 14, 23, 26).
- * Background location + the geofence triggers this copy describes are not
- * covered by the course material - see the scoping note in the build summary.
- */
+
 @Composable
 fun LocationPermissionScreen(
     onPermissionResolved: (granted: Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted -> onPermissionResolved(granted) }
+    var awaitingBackgroundStep by remember { mutableStateOf(false) }
 
+    val foregroundLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        when {
+            !granted -> onPermissionResolved(false)
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> awaitingBackgroundStep = true
+            else -> onPermissionResolved(true)
+        }
+    }
+
+    val backgroundLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ -> onPermissionResolved(true) }
+
+    if (awaitingBackgroundStep) {
+        BackgroundLocationStep(
+            onAllow = { backgroundLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) },
+            onNotNow = { onPermissionResolved(true) },
+            modifier = modifier
+        )
+    } else {
+        ForegroundLocationStep(
+            onAllow = { foregroundLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION) },
+            onNotNow = { onPermissionResolved(false) },
+            modifier = modifier
+        )
+    }
+}
+
+@Composable
+private fun ForegroundLocationStep(
+    onAllow: () -> Unit,
+    onNotNow: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    PermissionStepScaffold(
+        title = "Allow location access",
+        description = "GOSpot uses your location to find nearby GO stations and show " +
+            "how far you are from each parking lot.",
+        features = listOf(
+            "See nearby stations" to "Distances and directions are based on where you are.",
+            "Required to continue" to "The map and stations list need this to work."
+        ),
+        primaryLabel = "Allow while using the app",
+        onAllow = onAllow,
+        onNotNow = onNotNow,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun BackgroundLocationStep(
+    onAllow: () -> Unit,
+    onNotNow: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    PermissionStepScaffold(
+        title = "Allow location all the time",
+        description = "GOSpot draws a geofence around each GO lot. Crossing it checks you in and out automatically - no manual reporting.",
+        features = listOf(
+            "Background access is required" to "Geofence triggers must fire while the app is closed.",
+            "Battery friendly" to "The OS wakes the app only at lot boundaries, not continuously.",
+            "Only station events are stored" to "Firestore records arrival and departure - never your route."
+        ),
+        primaryLabel = "Allow all the time",
+        onAllow = onAllow,
+        onNotNow = onNotNow,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun PermissionStepScaffold(
+    title: String,
+    description: String,
+    features: List<Pair<String, String>>,
+    primaryLabel: String,
+    onAllow: () -> Unit,
+    onNotNow: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -78,43 +157,28 @@ fun LocationPermissionScreen(
         }
         Spacer(Modifier.height(24.dp))
         Text(
-            text = "Allow location all the time",
+            text = title,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
         Text(
-            text = "GOSpot draws a geofence around each GO lot. Crossing it checks you in and out automatically - no manual reporting.",
+            text = description,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
         )
 
-        FeatureRow(
-            title = "Background access is required",
-            subtitle = "Geofence triggers must fire while the app is closed."
-        )
-        FeatureRow(
-            title = "Battery friendly",
-            subtitle = "The OS wakes the app only at lot boundaries, not continuously."
-        )
-        FeatureRow(
-            title = "Only station events are stored",
-            subtitle = "Firestore records arrival and departure - never your route."
-        )
+        features.forEach { (rowTitle, subtitle) ->
+            FeatureRow(title = rowTitle, subtitle = subtitle)
+        }
 
         Spacer(Modifier.height(24.dp))
 
-        PrimaryButton(
-            text = "Allow all the time",
-            onClick = { launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION) }
-        )
+        PrimaryButton(text = primaryLabel, onClick = onAllow)
         Spacer(Modifier.height(8.dp))
-        SecondaryButton(
-            text = "Not now",
-            onClick = { onPermissionResolved(false) }
-        )
+        SecondaryButton(text = "Not now", onClick = onNotNow)
         Spacer(Modifier.height(24.dp))
     }
 }
