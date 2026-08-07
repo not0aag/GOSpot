@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,11 +26,18 @@ fun FullScreenLoading(modifier: Modifier = Modifier) {
     }
 }
 
-/** Error branch of the Week 6.1 Slide 18 sealed UiState, rendered as a banner. */
+/**
+ * Error branch of the Week 6.1 Slide 18 sealed UiState, rendered as a banner.
+ *
+ * [onDismiss] is optional so the terminal case (a profile that never loaded, with
+ * nothing else on screen) can keep rendering without a dismiss control, while
+ * recoverable action failures get one.
+ */
 @Composable
 fun ErrorBanner(
     message: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onDismiss: (() -> Unit)? = null
 ) {
     Row(
         modifier = modifier
@@ -37,12 +45,19 @@ fun ErrorBanner(
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.errorContainer)
             .padding(12.dp),
-        horizontalArrangement = Arrangement.Start
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = message,
             color = MaterialTheme.colorScheme.onErrorContainer,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f)
         )
+        if (onDismiss != null) {
+            TextButton(onClick = onDismiss) {
+                Text("Dismiss", color = MaterialTheme.colorScheme.onErrorContainer)
+            }
+        }
     }
 }

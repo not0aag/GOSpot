@@ -209,6 +209,22 @@ private fun SignedInApp(
     val eventsState by alertViewModel.eventsState.collectAsState()
     val stations = (stationsState as? UiState.Success)?.data ?: emptyList()
 
+    val stationActionError by stationViewModel.actionError.collectAsState()
+    val alertSettingsError by alertSettingsViewModel.actionError.collectAsState()
+
+    // The confirmation screen is only for check-ins started from the detail
+    // screen; toggling straight from the Stations list stays inline.
+    var awaitingConfirmationFor by remember { mutableStateOf<String?>(null) }
+    val completedAction by stationViewModel.completedAction.collectAsState()
+    LaunchedEffect(completedAction) {
+        val completed = completedAction ?: return@LaunchedEffect
+        if (completed.stationId == awaitingConfirmationFor) {
+            overlay = OverlayRoute.CheckInConfirmation(completed.stationId, completed.isCheckIn)
+            awaitingConfirmationFor = null
+        }
+        stationViewModel.consumeCompletedAction()
+    }
+
     when (val activeOverlay = overlay) {
         is OverlayRoute.StationDetail -> {
             val station = stations.find { it.id == activeOverlay.stationId }
@@ -218,12 +234,20 @@ private fun SignedInApp(
                 StationDetailScreen(
                     station = station,
                     isCheckedIn = station.id in checkedInIds,
+                    isPending = station.id == pendingStationId,
+                    errorMessage = stationActionError,
+                    onDismissError = { stationViewModel.clearActionError() },
                     onToggleCheckIn = {
-                        val willCheckIn = station.id !in checkedInIds
+                        // The overlay switches only once the write commits, so a
+                        // failed check-in shows the error banner instead of a
+                        // green "Checked in" screen it never earned.
+                        awaitingConfirmationFor = station.id
                         stationViewModel.toggleCheckIn(station)
-                        overlay = OverlayRoute.CheckInConfirmation(station.id, willCheckIn)
                     },
-                    onNavigateBack = { overlay = null }
+                    onNavigateBack = {
+                        awaitingConfirmationFor = null
+                        overlay = null
+                    }
                 )
                 return
             }
@@ -266,6 +290,19 @@ private fun SignedInApp(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            // Every ViewModel here computes failures; without this they were all
+            // written to StateFlows nothing ever read, so writes failed silently.
+            (stationActionError ?: alertSettingsError)?.let { message ->
+                ErrorBanner(
+                    message = message,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    onDismiss = {
+                        stationViewModel.clearActionError()
+                        alertSettingsViewModel.clearActionError()
+                    }
+                )
+            }
+
             when (currentTab) {
                 Route.MainTab.Map -> MapScreen(
                     mapViewModel = mapViewModel,

@@ -45,28 +45,36 @@ class StationRepository(
             .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
     }
 
-    suspend fun checkIn(station: Station): Result<Unit> = updateOccupancy(
-        station = station,
-        newOccupancy = (station.currentOccupancy + 1).coerceAtMost(station.capacityTotal),
-        eventType = CheckInEventType.CHECK_IN
-    )
+    suspend fun checkIn(station: Station): Result<Unit> =
+        updateOccupancyAtomic(station.id, delta = 1, eventType = CheckInEventType.CHECK_IN, auto = false)
 
-    suspend fun checkOut(station: Station): Result<Unit> = updateOccupancy(
-        station = station,
-        newOccupancy = (station.currentOccupancy - 1).coerceAtLeast(0),
-        eventType = CheckInEventType.CHECK_OUT
-    )
+    suspend fun checkOut(station: Station): Result<Unit> =
+        updateOccupancyAtomic(station.id, delta = -1, eventType = CheckInEventType.CHECK_OUT, auto = false)
 
     suspend fun checkInByStationId(stationId: String): Result<Unit> =
-        updateOccupancyByStationIdAtomic(stationId, delta = 1, eventType = CheckInEventType.CHECK_IN)
+        updateOccupancyAtomic(stationId, delta = 1, eventType = CheckInEventType.CHECK_IN, auto = true)
 
     suspend fun checkOutByStationId(stationId: String): Result<Unit> =
-        updateOccupancyByStationIdAtomic(stationId, delta = -1, eventType = CheckInEventType.CHECK_OUT)
+        updateOccupancyAtomic(stationId, delta = -1, eventType = CheckInEventType.CHECK_OUT, auto = true)
 
-    private suspend fun updateOccupancyByStationIdAtomic(
+    /**
+     * The single check-in/check-out path, manual and automatic alike.
+     *
+     * Reads and writes `currentOccupancy` inside one transaction so two commuters
+     * checking in at the same moment cannot overwrite each other - the earlier
+     * manual path computed `currentOccupancy + 1` from a snapshot the caller was
+     * already holding, which lost one of the two writes.
+     *
+     * The event is recorded only after the transaction commits, and the write is
+     * awaited rather than fired and forgotten: [week11.st695922.finalproject.receiver.GeofenceBroadcastReceiver]
+     * ends its broadcast as soon as this returns, so an un-awaited add can be
+     * killed with the process before Firestore flushes it.
+     */
+    private suspend fun updateOccupancyAtomic(
         stationId: String,
         delta: Int,
-        eventType: CheckInEventType
+        eventType: CheckInEventType,
+        auto: Boolean
     ): Result<Unit> {
         val stationRef = stationsRef.document(stationId)
         val txResult = suspendCancellableCoroutine<Result<Station>> { cont ->
@@ -80,25 +88,10 @@ class StationRepository(
             }.addOnSuccessListener { station -> cont.resume(Result.success(station)) }
                 .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
         }
-        txResult.onSuccess { station -> eventsRepository.recordEvent(station, eventType, auto = true) }
+        // A failed event write must not undo a committed occupancy change, so the
+        // caller's Result reflects the transaction only.
+        txResult.onSuccess { station -> eventsRepository.recordEvent(station, eventType, auto) }
         return txResult.map { }
-    }
-
-    private suspend fun updateOccupancy(
-        station: Station,
-        newOccupancy: Int,
-        eventType: CheckInEventType
-    ): Result<Unit> {
-        val updateResult = suspendCancellableCoroutine<Result<Unit>> { cont ->
-            stationsRef.document(station.id)
-                .update("currentOccupancy", newOccupancy)
-                .addOnSuccessListener { cont.resume(Result.success(Unit)) }
-                .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
-        }
-        if (updateResult.isSuccess) {
-            eventsRepository.recordEvent(station, eventType)
-        }
-        return updateResult
     }
 }
 
@@ -107,16 +100,46 @@ class CheckInEventRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val authRepository: AuthRepository = AuthRepository()
 ) {
-    fun recordEvent(station: Station, type: CheckInEventType, auto: Boolean = false) {
-        val uid = authRepository.currentUserId ?: return
-        val event = CheckInEvent(
+    suspend fun recordEvent(
+        station: Station,
+        type: CheckInEventType,
+        auto: Boolean = false
+    ): Result<Unit> = addEvent(
+        CheckInEvent(
             stationId = station.id,
             stationName = station.name,
             type = type.name,
             timestampMillis = System.currentTimeMillis(),
             auto = auto
         )
-        firestore.collection("users").document(uid).collection("events").add(event)
+    )
+
+    /**
+     * Records a "lot filling up" crossing so it shows on the Alerts tab, which
+     * promises lot warnings alongside check-ins. Written independently of the
+     * system notification, which can be suppressed by a missing permission.
+     */
+    suspend fun recordLotWarning(station: Station, alternate: Station?): Result<Unit> = addEvent(
+        CheckInEvent(
+            stationId = station.id,
+            stationName = station.name,
+            type = CheckInEventType.LOT_WARNING.name,
+            timestampMillis = System.currentTimeMillis(),
+            auto = true,
+            percentFull = station.percentFull,
+            alternateName = alternate?.name.orEmpty()
+        )
+    )
+
+    private suspend fun addEvent(event: CheckInEvent): Result<Unit> {
+        val uid = authRepository.currentUserId
+            ?: return Result.failure(IllegalStateException("No signed-in user to record this event for"))
+        return suspendCancellableCoroutine { cont ->
+            firestore.collection("users").document(uid).collection("events")
+                .add(event)
+                .addOnSuccessListener { cont.resume(Result.success(Unit)) }
+                .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
+        }
     }
 
     fun eventsFlow(uid: String): Flow<List<CheckInEvent>> = callbackFlow {

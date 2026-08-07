@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -62,7 +63,8 @@ fun AlertsScreen(
         if (events.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    "No check-ins yet. Check in from the Stations tab to see events here.",
+                    "Nothing yet. Check in from the Stations tab, or turn on lot alerts " +
+                        "in Profile, and events will show up here.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 32.dp)
@@ -80,7 +82,9 @@ fun AlertsScreen(
 
 @Composable
 private fun AlertCard(event: CheckInEvent) {
+    val isWarning = event.type == CheckInEventType.LOT_WARNING.name
     val isCheckIn = event.type == CheckInEventType.CHECK_IN.name
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -90,9 +94,17 @@ private fun AlertCard(event: CheckInEvent) {
     ) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
             Icon(
-                imageVector = if (isCheckIn) Icons.Filled.CheckCircle else Icons.AutoMirrored.Filled.Logout,
+                imageVector = when {
+                    isWarning -> Icons.Filled.Warning
+                    isCheckIn -> Icons.Filled.CheckCircle
+                    else -> Icons.AutoMirrored.Filled.Logout
+                },
                 contentDescription = null,
-                tint = if (isCheckIn) GoGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                tint = when {
+                    isWarning -> MaterialTheme.colorScheme.error
+                    isCheckIn -> GoGreen
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
             )
             Column(modifier = Modifier.padding(start = 12.dp).fillMaxWidth()) {
                 Row(
@@ -100,7 +112,11 @@ private fun AlertCard(event: CheckInEvent) {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        if (isCheckIn) "Checked in at ${event.stationName}" else "Checked out of ${event.stationName}",
+                        when {
+                            isWarning -> "${event.stationName} is filling up"
+                            isCheckIn -> "Checked in at ${event.stationName}"
+                            else -> "Checked out of ${event.stationName}"
+                        },
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium
                     )
@@ -111,12 +127,30 @@ private fun AlertCard(event: CheckInEvent) {
                     )
                 }
                 Text(
-                    "Manual ${if (isCheckIn) "check-in" else "check-out"} · live count updated for everyone.",
+                    if (isWarning) warningDetail(event) else checkInDetail(event, isCheckIn),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
+    }
+}
+
+private fun warningDetail(event: CheckInEvent): String {
+    val lead = "${event.percentFull}% full."
+    return if (event.alternateName.isBlank()) {
+        "$lead Nearby lots are busy too - leave a little earlier."
+    } else {
+        "$lead Try ${event.alternateName} instead."
+    }
+}
+
+private fun checkInDetail(event: CheckInEvent, isCheckIn: Boolean): String {
+    val action = if (isCheckIn) "check-in" else "check-out"
+    return if (event.auto) {
+        "Automatic $action via geofence · live count updated for everyone."
+    } else {
+        "Manual $action · live count updated for everyone."
     }
 }
 

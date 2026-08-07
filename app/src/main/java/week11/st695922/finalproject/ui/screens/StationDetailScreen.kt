@@ -1,7 +1,9 @@
 package week11.st695922.finalproject.ui.screens
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -32,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import week11.st695922.finalproject.model.Station
+import week11.st695922.finalproject.ui.components.ErrorBanner
 import week11.st695922.finalproject.ui.components.OccupancyBar
 import week11.st695922.finalproject.ui.components.PrimaryButton
 import week11.st695922.finalproject.ui.components.SecondaryButton
@@ -43,7 +46,10 @@ fun StationDetailScreen(
     isCheckedIn: Boolean,
     onToggleCheckIn: () -> Unit,
     onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isPending: Boolean = false,
+    errorMessage: String? = null,
+    onDismissError: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -124,9 +130,19 @@ fun StationDetailScreen(
 
             Spacer(Modifier.height(16.dp))
 
+            if (errorMessage != null) {
+                ErrorBanner(message = errorMessage, onDismiss = onDismissError)
+                Spacer(Modifier.height(8.dp))
+            }
+
             SecondaryButton(
-                text = if (isCheckedIn) "Check out" else "Check in",
-                onClick = onToggleCheckIn
+                text = when {
+                    isPending -> "Working..."
+                    isCheckedIn -> "Check out"
+                    else -> "Check in"
+                },
+                onClick = onToggleCheckIn,
+                enabled = !isPending
             )
             Spacer(Modifier.height(8.dp))
             PrimaryButton(
@@ -134,7 +150,12 @@ fun StationDetailScreen(
                 onClick = {
                     val uri = Uri.parse("geo:${station.lat},${station.lng}?q=${station.lat},${station.lng}(${station.name})")
                     val intent = Intent(Intent.ACTION_VIEW, uri)
-                    context.startActivity(intent)
+                    // No maps app is a real configuration on bare AOSP images.
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: ActivityNotFoundException) {
+                        Log.w("StationDetail", "No app can handle a geo: intent", e)
+                    }
                 }
             )
         }

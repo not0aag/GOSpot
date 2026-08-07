@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import week11.st695922.finalproject.data.AlertRepository
+import week11.st695922.finalproject.data.CheckInEventRepository
 import week11.st695922.finalproject.data.StationRepository
 import week11.st695922.finalproject.data.UserProfileRepository
 import week11.st695922.finalproject.model.AlertPolicy
@@ -41,7 +42,8 @@ class AlertSettingsViewModel(
     application: Application,
     private val alertRepository: AlertRepository = AlertRepository(),
     private val profileRepository: UserProfileRepository = UserProfileRepository(),
-    private val stationRepository: StationRepository = StationRepository()
+    private val stationRepository: StationRepository = StationRepository(),
+    private val eventsRepository: CheckInEventRepository = CheckInEventRepository()
 ) : AndroidViewModel(application) {
 
     private val profile: StateFlow<UserProfile?> = profileRepository.profileFlow(uid)
@@ -128,13 +130,14 @@ class AlertSettingsViewModel(
 
     /**
      * Fires the local "lot filling up" notification when the user's home
-     * station crosses [AlertPolicy.THRESHOLD_PERCENT].
+     * station crosses [AlertPolicy.THRESHOLD_PERCENT], and records the crossing
+     * to the Alerts feed.
      *
      * This is the on-device half of the alert path: it needs no server and no
      * billing, and it fires off exactly the same [AlertPolicy] decision a
      * Cloud Function would make.
      */
-    private fun evaluateThreshold(profile: UserProfile, stations: List<Station>) {
+    private suspend fun evaluateThreshold(profile: UserProfile, stations: List<Station>) {
         val home = stations.find { it.id == profile.homeStationId } ?: return
 
         if (!AlertPolicy.isOverThreshold(home)) {
@@ -146,13 +149,21 @@ class AlertSettingsViewModel(
         if (!profile.alertsEnabled) return
         if (home.id in alertedStationIds) return
 
-        val posted = AlertNotifier.postLotFillingAlert(
+        val alternate = AlertPolicy.suggestAlternate(home, stations)
+
+        // The feed row is written first and is what latches the alert: a blocked
+        // notification should still leave a record on the Alerts tab, and
+        // granting the permission later must not replay old crossings.
+        val recorded = eventsRepository.recordLotWarning(home, alternate)
+            .onFailure { e -> Log.w(TAG, "Could not record lot warning for ${home.id}", e) }
+
+        AlertNotifier.postLotFillingAlert(
             context = getApplication(),
             homeStation = home,
-            alternate = AlertPolicy.suggestAlternate(home, stations)
+            alternate = alternate
         )
-        // Only latch on a real post, so granting the permission later still alerts.
-        if (posted) alertedStationIds.add(home.id)
+
+        if (recorded.isSuccess) alertedStationIds.add(home.id)
     }
 
     /** Brings the device's topic subscription in line with the stored profile. */
