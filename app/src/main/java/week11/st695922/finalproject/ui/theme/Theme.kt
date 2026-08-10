@@ -13,10 +13,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = GoGreen,
-    secondary = GoGreenDark,
+    primary = GoGreenOnDark,
+    onPrimary = GoGreenInk,
+    secondary = GoGreenSoftDark,
+    onSecondary = GoGreenInk,
     tertiary = GoAmber,
-    error = GoRed
+    onTertiary = GoGreenInk,
+    error = GoRedOnDark,
+    onError = GoGreenInk,
+    primaryContainer = GoGreenContainerDark,
+    onPrimaryContainer = GoGreenContainer,
+    background = SurfaceBgDark,
+    onBackground = TextPrimaryDark,
+    surface = SurfaceDark,
+    onSurface = TextPrimaryDark,
+    outline = DividerDark
 )
 
 private val LightColorScheme = lightColorScheme(
