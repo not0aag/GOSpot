@@ -51,6 +51,10 @@ class StationViewModel @JvmOverloads constructor(
     private val _completedAction = MutableStateFlow<CompletedAction?>(null)
     val completedAction: StateFlow<CompletedAction?> = _completedAction.asStateFlow()
 
+    init {
+        synchronizeStationLocations()
+    }
+
     data class CompletedAction(val stationId: String, val isCheckIn: Boolean)
 
     fun consumeCompletedAction() {
@@ -86,9 +90,13 @@ class StationViewModel @JvmOverloads constructor(
     }
 
     fun seedDemoStations() {
+        synchronizeStationLocations()
+    }
+
+    private fun synchronizeStationLocations() {
         viewModelScope.launch {
-            seeder.seedIfEmpty()
-                .onFailure { e -> _actionError.value = e.message ?: "Could not seed demo stations" }
+            seeder.synchronizeStations()
+                .onFailure { e -> _actionError.value = e.message ?: "Could not update station locations" }
         }
     }
 }
