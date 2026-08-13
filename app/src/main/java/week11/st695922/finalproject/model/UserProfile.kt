@@ -20,6 +20,8 @@ data class UserProfile(
     val activeCheckInSource: String = "",
     /** Whether the active check-in actually incremented the station occupancy. */
     val activeOccupancyApplied: Boolean = false,
+    /** Lifetime successful check-ins. Clearing the Alerts event list does not reset this value. */
+    val totalCheckIns: Long = 0,
     /**
      * This device's FCM registration token. Stored so alerts can later be sent
      * to a specific device rather than fanned out over a station topic.

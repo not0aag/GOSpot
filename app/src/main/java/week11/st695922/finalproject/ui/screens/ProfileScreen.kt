@@ -68,7 +68,7 @@ import week11.st695922.finalproject.ui.hasNotificationPermission
 @Composable
 fun ProfileScreen(
     profile: UserProfile,
-    checkInsCount: Int,
+    checkInsCount: Long,
     alertsEnabled: Boolean,
     onAlertsEnabledChange: (Boolean) -> Unit,
     automaticCheckInEnabled: Boolean,
