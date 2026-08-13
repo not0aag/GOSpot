@@ -26,7 +26,6 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import week11.st695922.finalproject.model.CheckInEventType
 import week11.st695922.finalproject.model.UserProfile
 import week11.st695922.finalproject.ui.components.ErrorBanner
 import week11.st695922.finalproject.ui.components.FullScreenLoading
@@ -368,9 +367,7 @@ private fun SignedInApp(
                 }
                 Route.MainTab.Profile -> ProfileScreen(
                     profile = profile,
-                    checkInsCount = (eventsState as? UiState.Success)?.data
-                        ?.count { it.type == CheckInEventType.CHECK_IN.name }
-                        ?: 0,
+                    checkInsCount = profile.totalCheckIns,
                     alertsEnabled = alertsEnabled,
                     onAlertsEnabledChange = { alertSettingsViewModel.setAlertsEnabled(it) },
                     automaticCheckInEnabled = profile.automaticCheckInEnabled,

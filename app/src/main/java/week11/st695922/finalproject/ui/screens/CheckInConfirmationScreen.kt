@@ -2,17 +2,13 @@ package week11.st695922.finalproject.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -53,32 +49,16 @@ fun CheckInConfirmationScreen(
             modifier = Modifier.padding(top = 12.dp)
         )
         Spacer(Modifier.height(24.dp))
-        Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("What just happened", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                StepRow("Manual ${if (isCheckIn) "check-in" else "check-out"} tapped on Stations list")
-                StepRow("Firestore write to stations/${station.id}.currentOccupancy")
-                StepRow(
-                    "Live occupancy now ${station.currentOccupancy} / ${station.capacityTotal}"
-                )
-            }
-        }
-        Spacer(Modifier.height(16.dp))
         Text(
-            "GOSpot uses real-time Firestore updates to keep parking counts accurate " +
-                "for all commuters.",
-            style = MaterialTheme.typography.bodySmall,
+            if (isCheckIn) {
+                "Your check-in was recorded and the live parking availability was updated."
+            } else {
+                "Your checkout was recorded and the parking space was returned to the live count."
+            },
+            style = MaterialTheme.typography.bodyLarge,
             color = Color.White.copy(alpha = 0.85f)
         )
         Spacer(Modifier.height(24.dp))
         SecondaryButton(text = "Done", onClick = onDone)
-    }
-}
-
-@Composable
-private fun StepRow(text: String) {
-    Row(modifier = Modifier.padding(top = 8.dp)) {
-        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = GoGreen, modifier = Modifier.padding(end = 8.dp))
-        Text(text, style = MaterialTheme.typography.bodyMedium)
     }
 }

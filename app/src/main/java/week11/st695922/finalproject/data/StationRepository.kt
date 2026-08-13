@@ -1,6 +1,7 @@
 package week11.st695922.finalproject.data
 
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FieldValue
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -58,9 +59,9 @@ class StationRepository(
      * manual path computed `currentOccupancy + 1` from a snapshot the caller was
      * already holding, which lost one of the two writes.
      *
-     * The event is recorded only after the transaction commits, and the write is
-     * awaited rather than fired and forgotten so the background worker does not
-     * finish before Firestore has accepted the event write.
+     * The station values, active profile state, and lifetime check-in count commit
+     * together. Check-in history is intentionally not written until the team's
+     * deployed Firestore rules allow access to the per-user events collection.
      */
     private suspend fun transition(
         stationId: String,
@@ -71,7 +72,7 @@ class StationRepository(
             ?: return Result.failure(IllegalStateException("No signed-in user"))
         val userRef = firestore.collection("users").document(uid)
 
-        val txResult = suspendCancellableCoroutine<Result<TransitionOutcome>> { cont ->
+        return suspendCancellableCoroutine { cont ->
             firestore.runTransaction { transaction ->
                 val profile = transaction.get(userRef).toObject(UserProfile::class.java)
                     ?: throw IllegalStateException("User profile $uid not found")
@@ -84,7 +85,7 @@ class StationRepository(
                 )
 
                 when (operation) {
-                    CheckInOperation.NO_OP -> TransitionOutcome()
+                    CheckInOperation.NO_OP -> Unit
                     CheckInOperation.CHECK_OUT -> {
                         val stationRef = stationsRef.document(stationId)
                         val station = transaction.get(stationRef).toStation(stationId)
@@ -92,9 +93,6 @@ class StationRepository(
                             updateParkingAvailability(transaction, stationRef, station, deltaFree = 1)
                         }
                         transaction.update(userRef, clearedActiveFields())
-                        TransitionOutcome(
-                            listOf(EventToRecord(station, CheckInEventType.CHECK_OUT, automatic))
-                        )
                     }
                     CheckInOperation.CHECK_IN,
                     CheckInOperation.SWITCH_STATION -> {
@@ -127,27 +125,16 @@ class StationRepository(
                             mapOf(
                                 "activeStationId" to stationId,
                                 "activeCheckInSource" to if (automatic) SOURCE_AUTOMATIC else SOURCE_MANUAL,
-                                "activeOccupancyApplied" to occupancyApplied
+                                "activeOccupancyApplied" to occupancyApplied,
+                                "totalCheckIns" to FieldValue.increment(1L)
                             )
                         )
 
-                        val events = buildList {
-                            previous?.let { (_, station) ->
-                                add(EventToRecord(station, CheckInEventType.CHECK_OUT, automatic))
-                            }
-                            add(EventToRecord(target, CheckInEventType.CHECK_IN, automatic))
-                        }
-                        TransitionOutcome(events)
                     }
                 }
-            }.addOnSuccessListener { outcome -> cont.resume(Result.success(outcome)) }
+            }.addOnSuccessListener { cont.resume(Result.success(Unit)) }
                 .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
         }
-
-        txResult.getOrNull()?.events?.forEach { event ->
-            eventsRepository.recordEvent(event.station, event.type, event.automatic)
-        }
-        return txResult.map { }
     }
 
     suspend fun disableAutomaticCheckIn(): Result<Unit> {
@@ -155,7 +142,7 @@ class StationRepository(
             ?: return Result.failure(IllegalStateException("No signed-in user"))
         val userRef = firestore.collection("users").document(uid)
 
-        val result = suspendCancellableCoroutine<Result<TransitionOutcome>> { cont ->
+        return suspendCancellableCoroutine { cont ->
             firestore.runTransaction { transaction ->
                 val profile = transaction.get(userRef).toObject(UserProfile::class.java)
                     ?: throw IllegalStateException("User profile $uid not found")
@@ -181,28 +168,20 @@ class StationRepository(
                         mapOf("automaticCheckInEnabled" to false)
                     }
                 )
-                TransitionOutcome(
-                    activeStation?.let { (_, station) ->
-                        listOf(EventToRecord(station, CheckInEventType.CHECK_OUT, true))
-                    }.orEmpty()
-                )
+                Unit
             }.addOnSuccessListener { cont.resume(Result.success(it)) }
                 .addOnFailureListener { cont.resume(Result.failure(it)) }
         }
-        result.getOrNull()?.events?.forEach { event ->
-            eventsRepository.recordEvent(event.station, event.type, event.automatic)
-        }
-        return result.map { }
     }
 
     suspend fun checkOutActiveUser(): Result<Unit> {
         val uid = eventsRepository.currentUserId ?: return Result.success(Unit)
         val userRef = firestore.collection("users").document(uid)
-        val result = suspendCancellableCoroutine<Result<TransitionOutcome>> { cont ->
+        return suspendCancellableCoroutine { cont ->
             firestore.runTransaction { transaction ->
                 val profile = transaction.get(userRef).toObject(UserProfile::class.java)
                     ?: throw IllegalStateException("User profile $uid not found")
-                if (profile.activeStationId.isBlank()) return@runTransaction TransitionOutcome()
+                if (profile.activeStationId.isBlank()) return@runTransaction
 
                 val stationRef = stationsRef.document(profile.activeStationId)
                 val station = transaction.get(stationRef).toStation(profile.activeStationId)
@@ -210,22 +189,10 @@ class StationRepository(
                     updateParkingAvailability(transaction, stationRef, station, deltaFree = 1)
                 }
                 transaction.update(userRef, clearedActiveFields())
-                TransitionOutcome(
-                    listOf(
-                        EventToRecord(
-                            station,
-                            CheckInEventType.CHECK_OUT,
-                            profile.activeCheckInSource == SOURCE_AUTOMATIC
-                        )
-                    )
-                )
+                Unit
             }.addOnSuccessListener { cont.resume(Result.success(it)) }
                 .addOnFailureListener { cont.resume(Result.failure(it)) }
         }
-        result.getOrNull()?.events?.forEach { event ->
-            eventsRepository.recordEvent(event.station, event.type, event.automatic)
-        }
-        return result.map { }
     }
 
     private fun com.google.firebase.firestore.DocumentSnapshot.toStation(id: String): Station =
@@ -261,14 +228,6 @@ class StationRepository(
         )
     }
 
-    private data class EventToRecord(
-        val station: Station,
-        val type: CheckInEventType,
-        val automatic: Boolean
-    )
-
-    private data class TransitionOutcome(val events: List<EventToRecord> = emptyList())
-
     private companion object {
         const val SOURCE_MANUAL = "MANUAL"
         const val SOURCE_AUTOMATIC = "AUTOMATIC"
@@ -282,20 +241,6 @@ class CheckInEventRepository(
 ) {
     val currentUserId: String?
         get() = authRepository.currentUserId
-
-    suspend fun recordEvent(
-        station: Station,
-        type: CheckInEventType,
-        auto: Boolean = false
-    ): Result<Unit> = addEvent(
-        CheckInEvent(
-            stationId = station.id,
-            stationName = station.name,
-            type = type.name,
-            timestampMillis = System.currentTimeMillis(),
-            auto = auto
-        )
-    )
 
     /**
      * Records a "lot filling up" crossing so it shows on the Alerts tab, which
