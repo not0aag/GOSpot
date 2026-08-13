@@ -2,7 +2,7 @@
 
 A live parking-availability companion for GO Transit commuters on the Lakeshore West line, built for a three-person final project (PROG39402 — Advanced Android).
 
-> **Current status:** this repo implements Step 2's scope (Auth, MVVM, Firestore) and the core **Maps & Routing** features from Step 3. The geofencing and push notification components are designed and in active development.
+> **Current status:** this repo implements authentication, MVVM, Firestore, live parking availability, Maps & Routing, automatic geofencing, and parking alerts.
 
 ## Team
 
@@ -21,18 +21,19 @@ Package name: `week11.st695922.finalproject`
 - **Firebase Authentication** — email/password sign in, sign up, sign out, and forgot-password (`sendPasswordResetEmail`)
 - **MVVM architecture** — Repository → ViewModel → Compose UI, with all Firebase calls isolated behind suspend functions
 - **Firestore CRUD** — a shared `stations` collection with real-time listeners, plus manual Check In / Check Out that updates live occupancy
-- **Per-user data** — home station preference and a check-in/check-out event log under `users/{uid}`, backing a live Alerts screen
+- **Automatic geofencing** — opt-in automatic check-in and check-out with shared occupancy updates
+- **Per-user data** — home station preference, alert settings, active check-in state, and lifetime check-in totals under `users/{uid}`
 - **One-time location** — `FusedLocationProviderClient` powers a "Nearest" sort on the Stations list
 - **State-driven navigation** — screen switching via a sealed `Route`/`UiState`, no `androidx.navigation.compose`
 - **Firestore security rules** — first draft (`firestore.rules`)
 
 ## Scope of this build
 
-This project follows a 14-week Advanced Android Application Development timeline. This repository currently reflects **Step 2** of a 4-step final project plan:
+This project follows a 14-week Advanced Android Application Development timeline. This repository currently reflects **Step 3** of a 4-step final project plan:
 
 1.  **Step 1:** Project Proposal & Figma Prototype (Completed)
-2.  **Step 2:** Firebase Auth, MVVM Architecture, and Firestore CRUD (Completed - Current State)
-3.  **Step 3:** Maps & Routing — Advanced Topic Deliverables (In Progress)
+2.  **Step 2:** Firebase Auth, MVVM Architecture, and Firestore CRUD (Completed)
+3.  **Step 3:** Maps & Routing — Advanced Topic Deliverables (Current State)
 4.  **Step 4:** Final Presentation & Demo (Upcoming)
 
 Features currently being refined or in active development as part of Step 3 (due Week 13) include:
@@ -40,7 +41,7 @@ Features currently being refined or in active development as part of Step 3 (due
 | Feature | Current Status | Step 3 Deliverable |
 |---|---|---|
 | Live interactive map | Implemented (Step 3) | Full Google Maps SDK rendering with real-time station markers |
-| Automatic geofencing | Manual Stand-in | Background entry/exit detection via `GeofencingClient` |
+| Automatic geofencing | Implemented (Step 3) | Opt-in automatic check-in and check-out with shared occupancy updates |
 | Route/Navigation | Implemented (Step 3) | Intent-based routing to the nearest available station |
 | Lot-full push alerts | Mocked | Firebase Cloud Messaging (FCM) integration |
 
