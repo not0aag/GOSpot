@@ -7,7 +7,10 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import week11.st695922.finalproject.model.CheckInEvent
 import week11.st695922.finalproject.model.CheckInEventType
+import week11.st695922.finalproject.model.CheckInOperation
+import week11.st695922.finalproject.model.CheckInTransitionPolicy
 import week11.st695922.finalproject.model.Station
+import week11.st695922.finalproject.model.UserProfile
 import kotlin.coroutines.resume
 
 /**
@@ -35,29 +38,17 @@ class StationRepository(
     }
 
 
-    suspend fun resetAllOccupancy(): Result<Unit> = suspendCancellableCoroutine { cont ->
-        stationsRef.get()
-            .addOnSuccessListener { snapshot ->
-                val batch = firestore.batch()
-                snapshot.documents.forEach { doc -> batch.update(doc.reference, "currentOccupancy", 0) }
-                batch.commit()
-                    .addOnSuccessListener { cont.resume(Result.success(Unit)) }
-                    .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
-            }
-            .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
-    }
-
     suspend fun checkIn(station: Station): Result<Unit> =
-        updateOccupancyAtomic(station.id, delta = 1, eventType = CheckInEventType.CHECK_IN, auto = false)
+        transition(station.id, wantsCheckIn = true, automatic = false)
 
     suspend fun checkOut(station: Station): Result<Unit> =
-        updateOccupancyAtomic(station.id, delta = -1, eventType = CheckInEventType.CHECK_OUT, auto = false)
+        transition(station.id, wantsCheckIn = false, automatic = false)
 
     suspend fun checkInByStationId(stationId: String): Result<Unit> =
-        updateOccupancyAtomic(stationId, delta = 1, eventType = CheckInEventType.CHECK_IN, auto = true)
+        transition(stationId, wantsCheckIn = true, automatic = true)
 
     suspend fun checkOutByStationId(stationId: String): Result<Unit> =
-        updateOccupancyAtomic(stationId, delta = -1, eventType = CheckInEventType.CHECK_OUT, auto = true)
+        transition(stationId, wantsCheckIn = false, automatic = true)
 
     /**
      * The single check-in/check-out path, manual and automatic alike.
@@ -68,32 +59,219 @@ class StationRepository(
      * already holding, which lost one of the two writes.
      *
      * The event is recorded only after the transaction commits, and the write is
-     * awaited rather than fired and forgotten: [week11.st695922.finalproject.receiver.GeofenceBroadcastReceiver]
-     * ends its broadcast as soon as this returns, so an un-awaited add can be
-     * killed with the process before Firestore flushes it.
+     * awaited rather than fired and forgotten so the background worker does not
+     * finish before Firestore has accepted the event write.
      */
-    private suspend fun updateOccupancyAtomic(
+    private suspend fun transition(
         stationId: String,
-        delta: Int,
-        eventType: CheckInEventType,
-        auto: Boolean
+        wantsCheckIn: Boolean,
+        automatic: Boolean
     ): Result<Unit> {
-        val stationRef = stationsRef.document(stationId)
-        val txResult = suspendCancellableCoroutine<Result<Station>> { cont ->
+        val uid = eventsRepository.currentUserId
+            ?: return Result.failure(IllegalStateException("No signed-in user"))
+        val userRef = firestore.collection("users").document(uid)
+
+        val txResult = suspendCancellableCoroutine<Result<TransitionOutcome>> { cont ->
             firestore.runTransaction { transaction ->
-                val snapshot = transaction.get(stationRef)
-                val station = snapshot.toObject(Station::class.java)?.copy(id = snapshot.id)
-                    ?: throw IllegalStateException("Station $stationId not found")
-                val newOccupancy = (station.currentOccupancy + delta).coerceIn(0, station.capacityTotal)
-                transaction.update(stationRef, "currentOccupancy", newOccupancy)
-                station
-            }.addOnSuccessListener { station -> cont.resume(Result.success(station)) }
+                val profile = transaction.get(userRef).toObject(UserProfile::class.java)
+                    ?: throw IllegalStateException("User profile $uid not found")
+                val operation = CheckInTransitionPolicy.decide(
+                    activeStationId = profile.activeStationId,
+                    targetStationId = stationId,
+                    wantsCheckIn = wantsCheckIn,
+                    automatic = automatic,
+                    automaticEnabled = profile.automaticCheckInEnabled
+                )
+
+                when (operation) {
+                    CheckInOperation.NO_OP -> TransitionOutcome()
+                    CheckInOperation.CHECK_OUT -> {
+                        val stationRef = stationsRef.document(stationId)
+                        val station = transaction.get(stationRef).toStation(stationId)
+                        if (profile.activeOccupancyApplied) {
+                            updateParkingAvailability(transaction, stationRef, station, deltaFree = 1)
+                        }
+                        transaction.update(userRef, clearedActiveFields())
+                        TransitionOutcome(
+                            listOf(EventToRecord(station, CheckInEventType.CHECK_OUT, automatic))
+                        )
+                    }
+                    CheckInOperation.CHECK_IN,
+                    CheckInOperation.SWITCH_STATION -> {
+                        val targetRef = stationsRef.document(stationId)
+                        val target = transaction.get(targetRef).toStation(stationId)
+                        val previous = if (operation == CheckInOperation.SWITCH_STATION) {
+                            val previousRef = stationsRef.document(profile.activeStationId)
+                            previousRef to transaction.get(previousRef).toStation(profile.activeStationId)
+                        } else {
+                            null
+                        }
+
+                        previous?.let { (previousRef, previousStation) ->
+                            if (profile.activeOccupancyApplied) {
+                                updateParkingAvailability(
+                                    transaction,
+                                    previousRef,
+                                    previousStation,
+                                    deltaFree = 1
+                                )
+                            }
+                        }
+
+                        val occupancyApplied = target.capacityTotal > 0 && target.spacesFree > 0
+                        if (occupancyApplied) {
+                            updateParkingAvailability(transaction, targetRef, target, deltaFree = -1)
+                        }
+                        transaction.update(
+                            userRef,
+                            mapOf(
+                                "activeStationId" to stationId,
+                                "activeCheckInSource" to if (automatic) SOURCE_AUTOMATIC else SOURCE_MANUAL,
+                                "activeOccupancyApplied" to occupancyApplied
+                            )
+                        )
+
+                        val events = buildList {
+                            previous?.let { (_, station) ->
+                                add(EventToRecord(station, CheckInEventType.CHECK_OUT, automatic))
+                            }
+                            add(EventToRecord(target, CheckInEventType.CHECK_IN, automatic))
+                        }
+                        TransitionOutcome(events)
+                    }
+                }
+            }.addOnSuccessListener { outcome -> cont.resume(Result.success(outcome)) }
                 .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
         }
-        // A failed event write must not undo a committed occupancy change, so the
-        // caller's Result reflects the transaction only.
-        txResult.onSuccess { station -> eventsRepository.recordEvent(station, eventType, auto) }
+
+        txResult.getOrNull()?.events?.forEach { event ->
+            eventsRepository.recordEvent(event.station, event.type, event.automatic)
+        }
         return txResult.map { }
+    }
+
+    suspend fun disableAutomaticCheckIn(): Result<Unit> {
+        val uid = eventsRepository.currentUserId
+            ?: return Result.failure(IllegalStateException("No signed-in user"))
+        val userRef = firestore.collection("users").document(uid)
+
+        val result = suspendCancellableCoroutine<Result<TransitionOutcome>> { cont ->
+            firestore.runTransaction { transaction ->
+                val profile = transaction.get(userRef).toObject(UserProfile::class.java)
+                    ?: throw IllegalStateException("User profile $uid not found")
+                val activeStation = if (
+                    profile.activeCheckInSource == SOURCE_AUTOMATIC && profile.activeStationId.isNotBlank()
+                ) {
+                    val stationRef = stationsRef.document(profile.activeStationId)
+                    stationRef to transaction.get(stationRef).toStation(profile.activeStationId)
+                } else {
+                    null
+                }
+
+                activeStation?.let { (stationRef, station) ->
+                    if (profile.activeOccupancyApplied) {
+                        updateParkingAvailability(transaction, stationRef, station, deltaFree = 1)
+                    }
+                }
+                transaction.update(
+                    userRef,
+                    if (activeStation != null) {
+                        clearedActiveFields() + ("automaticCheckInEnabled" to false)
+                    } else {
+                        mapOf("automaticCheckInEnabled" to false)
+                    }
+                )
+                TransitionOutcome(
+                    activeStation?.let { (_, station) ->
+                        listOf(EventToRecord(station, CheckInEventType.CHECK_OUT, true))
+                    }.orEmpty()
+                )
+            }.addOnSuccessListener { cont.resume(Result.success(it)) }
+                .addOnFailureListener { cont.resume(Result.failure(it)) }
+        }
+        result.getOrNull()?.events?.forEach { event ->
+            eventsRepository.recordEvent(event.station, event.type, event.automatic)
+        }
+        return result.map { }
+    }
+
+    suspend fun checkOutActiveUser(): Result<Unit> {
+        val uid = eventsRepository.currentUserId ?: return Result.success(Unit)
+        val userRef = firestore.collection("users").document(uid)
+        val result = suspendCancellableCoroutine<Result<TransitionOutcome>> { cont ->
+            firestore.runTransaction { transaction ->
+                val profile = transaction.get(userRef).toObject(UserProfile::class.java)
+                    ?: throw IllegalStateException("User profile $uid not found")
+                if (profile.activeStationId.isBlank()) return@runTransaction TransitionOutcome()
+
+                val stationRef = stationsRef.document(profile.activeStationId)
+                val station = transaction.get(stationRef).toStation(profile.activeStationId)
+                if (profile.activeOccupancyApplied) {
+                    updateParkingAvailability(transaction, stationRef, station, deltaFree = 1)
+                }
+                transaction.update(userRef, clearedActiveFields())
+                TransitionOutcome(
+                    listOf(
+                        EventToRecord(
+                            station,
+                            CheckInEventType.CHECK_OUT,
+                            profile.activeCheckInSource == SOURCE_AUTOMATIC
+                        )
+                    )
+                )
+            }.addOnSuccessListener { cont.resume(Result.success(it)) }
+                .addOnFailureListener { cont.resume(Result.failure(it)) }
+        }
+        result.getOrNull()?.events?.forEach { event ->
+            eventsRepository.recordEvent(event.station, event.type, event.automatic)
+        }
+        return result.map { }
+    }
+
+    private fun com.google.firebase.firestore.DocumentSnapshot.toStation(id: String): Station =
+        toObject(Station::class.java)?.copy(id = id)
+            ?: throw IllegalStateException("Station $id not found")
+
+    private fun clearedActiveFields(): Map<String, Any> = mapOf(
+        "activeStationId" to "",
+        "activeCheckInSource" to "",
+        "activeOccupancyApplied" to false
+    )
+
+    private fun updateParkingAvailability(
+        transaction: com.google.firebase.firestore.Transaction,
+        stationRef: com.google.firebase.firestore.DocumentReference,
+        station: Station,
+        deltaFree: Int
+    ) {
+        val newSpacesFree = (station.spacesFree + deltaFree).coerceIn(0, station.capacityTotal)
+        val newOccupancy = (station.capacityTotal - newSpacesFree).coerceAtLeast(0)
+        val newPercentFull = if (station.capacityTotal <= 0) {
+            0
+        } else {
+            ((newOccupancy * 100) / station.capacityTotal).coerceIn(0, 100)
+        }
+        transaction.update(
+            stationRef,
+            mapOf(
+                "spacesFree" to newSpacesFree,
+                "currentOccupancy" to newOccupancy,
+                "percentFull" to newPercentFull
+            )
+        )
+    }
+
+    private data class EventToRecord(
+        val station: Station,
+        val type: CheckInEventType,
+        val automatic: Boolean
+    )
+
+    private data class TransitionOutcome(val events: List<EventToRecord> = emptyList())
+
+    private companion object {
+        const val SOURCE_MANUAL = "MANUAL"
+        const val SOURCE_AUTOMATIC = "AUTOMATIC"
     }
 }
 
@@ -102,6 +280,9 @@ class CheckInEventRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val authRepository: AuthRepository = AuthRepository()
 ) {
+    val currentUserId: String?
+        get() = authRepository.currentUserId
+
     suspend fun recordEvent(
         station: Station,
         type: CheckInEventType,

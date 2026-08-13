@@ -36,14 +36,6 @@ class StationViewModel @JvmOverloads constructor(
     val actionError: StateFlow<String?> = _actionError.asStateFlow()
 
     /**
-     * Tracks which stations *this device* has manually checked into, so the
-     * Stations list can show "Check out" instead of "Check in". This is local
-     * UI state only, not a Firestore field.
-     */
-    private val _checkedInStationIds = MutableStateFlow<Set<String>>(emptySet())
-    val checkedInStationIds: StateFlow<Set<String>> = _checkedInStationIds.asStateFlow()
-
-    /**
      * The last check-in/out that actually committed, published so the UI can
      * show its confirmation screen only once the Firestore write succeeded.
      * Consumed via [consumeCompletedAction] so it fires once per action.
@@ -61,8 +53,9 @@ class StationViewModel @JvmOverloads constructor(
         _completedAction.value = null
     }
 
-    fun toggleCheckIn(station: Station) {
-        val isCheckedIn = station.id in _checkedInStationIds.value
+    fun toggleCheckIn(station: Station, activeStationId: String) {
+        if (_pendingStationId.value != null) return
+        val isCheckedIn = station.id == activeStationId
         runStationAction(station, isCheckIn = !isCheckedIn) {
             if (isCheckedIn) repository.checkOut(station) else repository.checkIn(station)
         }
@@ -74,11 +67,6 @@ class StationViewModel @JvmOverloads constructor(
             val result = action()
             _pendingStationId.value = null
             result.onSuccess {
-                _checkedInStationIds.value = if (isCheckIn) {
-                    _checkedInStationIds.value + station.id
-                } else {
-                    _checkedInStationIds.value - station.id
-                }
                 _completedAction.value = CompletedAction(station.id, isCheckIn)
             }
             result.onFailure { e -> _actionError.value = e.message ?: "Action failed" }
