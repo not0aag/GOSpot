@@ -16,3 +16,5 @@ local.properties
 
 # Firebase config - repo is public; keep this out of version control.
 app/google-services.json
+config.bat
+node_modules
