@@ -16,12 +16,12 @@ class StationSeeder(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
     private val demoStations = listOf(
-        Station("oakville", "Oakville GO", "214 Cross Ave · Lakeshore West", 1987, 1550, 43.4409, -79.6673),
-        Station("bronte", "Bronte GO", "Bronte Rd · Lakeshore West", 1730, 588, 43.3956, -79.7134),
-        Station("clarkson", "Clarkson GO", "Clarkson Rd S · Lakeshore West", 2600, 1430, 43.5183, -79.6392),
-        Station("portcredit", "Port Credit GO", "70 Elizabeth St S · Lakeshore West", 1300, 936, 43.5550, -79.5878),
-        Station("mimico", "Mimico GO", "285 Royal York Rd · Lakeshore West", 400, 352, 43.6169, -79.4959),
-        Station("longbranch", "Long Branch GO", "3131 Lakeshore Blvd W · Lakeshore West", 800, 328, 43.5928, -79.5435)
+        Station("oakville", "Oakville GO", "214 Cross Ave · Lakeshore West", 1987, 1550, 43.45500, -79.68250),
+        Station("bronte", "Bronte GO", "2104 Wyecroft Rd · Lakeshore West", 1730, 588, 	43.418624, -79.725038),
+        Station("clarkson", "Clarkson GO", "Clarkson Rd S · Lakeshore West", 2600, 1430, 	43.365126, -80.254255),
+        Station("portcredit", "Port Credit GO", "70 Elizabeth St S · Lakeshore West", 1300, 936, 	43.365126, -80.254255),
+        Station("mimico", "Mimico GO", "285 Royal York Rd · Lakeshore West", 400, 352, 		43.365126, -80.254255),
+        Station("longbranch", "Long Branch GO", "3131 Lakeshore Blvd W · Lakeshore West", 800, 328, 43.365126, -80.254255)
     )
 
     suspend fun seedIfEmpty(): Result<Unit> = suspendCancellableCoroutine { cont ->
