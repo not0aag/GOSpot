@@ -15,11 +15,7 @@ data class Station(
     val capacityTotal: Int = 0,
     val currentOccupancy: Int = 0,
     val lat: Double = 0.0,
-    val lng: Double = 0.0
-) {
-    val spacesFree: Int
-        get() = (capacityTotal - currentOccupancy).coerceAtLeast(0)
-
-    val percentFull: Int
-        get() = if (capacityTotal <= 0) 0 else ((currentOccupancy * 100) / capacityTotal).coerceIn(0, 100)
-}
+    val lng: Double = 0.0,
+    val spacesFree: Int = 0,
+    val percentFull: Int = 0
+)

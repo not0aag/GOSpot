@@ -33,7 +33,16 @@ class MapViewModelTest {
 
     @Test
     fun `getNearestAvailableStation returns the only available station`() {
-        val station = Station(id = "1", name = "Test", capacityTotal = 10, currentOccupancy = 5, lat = 43.0, lng = -79.0)
+        val station = Station(
+            id = "1",
+            name = "Test",
+            capacityTotal = 10,
+            currentOccupancy = 5,
+            lat = 43.0,
+            lng = -79.0,
+            spacesFree = 5,
+            percentFull = 50
+        )
         // Note: MapViewModel reads from stationsState, which is populated via stationsFlow() in init.
         // But since stationsState is a StateFlow, we might need to wait for it or mock the state directly if possible.
         // Actually, the current MapViewModel implementation reads repository.stationsFlow() and stateIn.

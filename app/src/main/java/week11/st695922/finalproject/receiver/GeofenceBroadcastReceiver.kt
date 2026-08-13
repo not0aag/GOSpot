@@ -4,20 +4,19 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import androidx.work.Constraints
+import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofenceStatusCodes
 import com.google.android.gms.location.GeofencingEvent
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
-import week11.st695922.finalproject.data.StationRepository
+import week11.st695922.finalproject.worker.GeofenceTransitionWorker
 
 
 class GeofenceBroadcastReceiver : BroadcastReceiver() {
-
-    private val repository = StationRepository()
-
     override fun onReceive(context: Context, intent: Intent) {
         val geofencingEvent = GeofencingEvent.fromIntent(intent)
         if (geofencingEvent == null) {
@@ -41,26 +40,26 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
         if (stationIds.isEmpty()) return
 
 
-        val pendingResult = goAsync()
-        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
-            try {
-                stationIds.forEach { stationId ->
-                    val result = if (transition == Geofence.GEOFENCE_TRANSITION_ENTER) {
-                        repository.checkInByStationId(stationId)
-                    } else {
-                        repository.checkOutByStationId(stationId)
-                    }
-                    result.onFailure { e ->
-                        Log.e(TAG, "Failed to record automatic transition for station $stationId", e)
-                    }
-                }
-            } finally {
-                pendingResult.finish()
-            }
-        }
+        val input = Data.Builder()
+            .putInt(GeofenceTransitionWorker.KEY_TRANSITION, transition)
+            .putStringArray(GeofenceTransitionWorker.KEY_STATION_IDS, stationIds.toTypedArray())
+            .build()
+        val request = OneTimeWorkRequestBuilder<GeofenceTransitionWorker>()
+            .setInputData(input)
+            .setConstraints(
+                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+            )
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            UNIQUE_TRANSITION_WORK,
+            ExistingWorkPolicy.APPEND_OR_REPLACE,
+            request
+        )
     }
 
     companion object {
         private const val TAG = "GeofenceReceiver"
+        private const val UNIQUE_TRANSITION_WORK = "geofence-transitions"
     }
 }

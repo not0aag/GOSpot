@@ -37,6 +37,9 @@ class UserProfileRepository(
     suspend fun setAlertsEnabled(uid: String, enabled: Boolean): Result<Unit> =
         updateFields(uid, mapOf("alertsEnabled" to enabled))
 
+    suspend fun setAutomaticCheckInEnabled(uid: String, enabled: Boolean): Result<Unit> =
+        updateFields(uid, mapOf("automaticCheckInEnabled" to enabled))
+
     /** Persists this device's FCM registration token onto the profile. */
     suspend fun setFcmToken(uid: String, token: String): Result<Unit> =
         updateFields(uid, mapOf("fcmToken" to token))

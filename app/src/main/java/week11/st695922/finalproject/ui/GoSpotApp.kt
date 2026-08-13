@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -132,31 +133,55 @@ private fun MainAppFlow(uid: String, authViewModel: AuthViewModel) {
     )
     val mapViewModel: MapViewModel = viewModel()
     val locationViewModel: LocationViewModel = viewModel()
-    LaunchedEffect(Unit) { locationViewModel.refreshLocation() }
+    LifecycleResumeEffect(Unit) {
+        if (hasLocationPermission(context)) locationViewModel.startForegroundUpdates()
+        onPauseOrDispose { locationViewModel.stopForegroundUpdates() }
+    }
     val userLocation by locationViewModel.lastLocation.collectAsState()
 
     val stationsState by stationViewModel.stationsState.collectAsState()
     val profileState by profileViewModel.profileState.collectAsState()
 
     val geofenceViewModel: GeofenceViewModel = viewModel()
-    val stationsForGeofencing = (stationsState as? UiState.Success)?.data ?: emptyList()
-    LaunchedEffect(
-        stationsForGeofencing
-            .sortedBy { it.id }
-            .map { Triple(it.id, it.lat, it.lng) }
-    ) {
-        if (stationsForGeofencing.isNotEmpty() &&
-            hasLocationPermission(context) &&
-            hasBackgroundLocationPermission(context)
-        ) {
-            geofenceViewModel.registerGeofences(stationsForGeofencing)
-        }
-    }
+    val geofenceError by geofenceViewModel.error.collectAsState()
+    val geofenceSettingBusy by geofenceViewModel.settingUpdateInProgress.collectAsState()
 
     when (val profile = profileState) {
         is UiState.Loading -> FullScreenLoading()
         is UiState.Error -> ErrorBanner(profile.message, modifier = Modifier.padding(24.dp))
         is UiState.Success -> {
+            val stationsForGeofencing = (stationsState as? UiState.Success)?.data ?: emptyList()
+            val stationSignature = stationsForGeofencing
+                .sortedBy { it.id }
+                .joinToString("|") { "${it.id}:${it.lat}:${it.lng}" }
+            LaunchedEffect(profile.data.automaticCheckInEnabled, stationSignature) {
+                if (profile.data.automaticCheckInEnabled &&
+                    stationsForGeofencing.isNotEmpty() &&
+                    hasLocationPermission(context) &&
+                    hasBackgroundLocationPermission(context)
+                ) {
+                    geofenceViewModel.registerGeofences(stationsForGeofencing)
+                } else {
+                    geofenceViewModel.removeGeofences()
+                }
+            }
+            LaunchedEffect(
+                userLocation?.latitude,
+                userLocation?.longitude,
+                profile.data.automaticCheckInEnabled,
+                profile.data.activeStationId,
+                stationSignature
+            ) {
+                userLocation?.let { location ->
+                    geofenceViewModel.evaluateForegroundProximity(
+                        location = location,
+                        stations = stationsForGeofencing,
+                        activeStationId = profile.data.activeStationId,
+                        automaticCheckInEnabled = profile.data.automaticCheckInEnabled
+                    )
+                }
+            }
+
             if (profile.data.homeStationId.isBlank()) {
                 val stations = (stationsState as? UiState.Success)?.data ?: emptyList()
                 PickHomeStationScreen(
@@ -171,9 +196,14 @@ private fun MainAppFlow(uid: String, authViewModel: AuthViewModel) {
                     profileViewModel = profileViewModel,
                     alertViewModel = alertViewModel,
                     mapViewModel = mapViewModel,
+                    geofenceViewModel = geofenceViewModel,
                     profile = profile.data,
                     userLocation = userLocation,
-                    onSignOut = { authViewModel.signOut() }
+                    geofenceError = geofenceError,
+                    geofenceSettingBusy = geofenceSettingBusy,
+                    onSignOut = {
+                        geofenceViewModel.prepareForSignOut { authViewModel.signOut() }
+                    }
                 )
             }
         }
@@ -193,8 +223,11 @@ private fun SignedInApp(
     profileViewModel: ProfileViewModel,
     alertViewModel: AlertViewModel,
     mapViewModel: MapViewModel,
+    geofenceViewModel: GeofenceViewModel,
     profile: UserProfile,
     userLocation: Location?,
+    geofenceError: String?,
+    geofenceSettingBusy: Boolean,
     onSignOut: () -> Unit
 ) {
     var currentTab by remember { mutableStateOf<Route.MainTab>(Route.MainTab.Map) }
@@ -208,13 +241,17 @@ private fun SignedInApp(
     LaunchedEffect(uid) { alertSettingsViewModel.syncFcmToken() }
 
     val stationsState by stationViewModel.stationsState.collectAsState()
-    val checkedInIds by stationViewModel.checkedInStationIds.collectAsState()
     val pendingStationId by stationViewModel.pendingStationId.collectAsState()
     val eventsState by alertViewModel.eventsState.collectAsState()
     val stations = (stationsState as? UiState.Success)?.data ?: emptyList()
 
     val stationActionError by stationViewModel.actionError.collectAsState()
     val alertSettingsError by alertSettingsViewModel.actionError.collectAsState()
+    val checkedInIds = if (profile.activeStationId.isBlank()) {
+        emptySet()
+    } else {
+        setOf(profile.activeStationId)
+    }
 
     // The confirmation screen is only for check-ins started from the detail
     // screen; toggling straight from the Stations list stays inline.
@@ -246,7 +283,7 @@ private fun SignedInApp(
                         // failed check-in shows the error banner instead of a
                         // green "Checked in" screen it never earned.
                         awaitingConfirmationFor = station.id
-                        stationViewModel.toggleCheckIn(station)
+                        stationViewModel.toggleCheckIn(station, profile.activeStationId)
                     },
                     onNavigateBack = {
                         awaitingConfirmationFor = null
@@ -296,13 +333,14 @@ private fun SignedInApp(
         ) {
             // Every ViewModel here computes failures; without this they were all
             // written to StateFlows nothing ever read, so writes failed silently.
-            (stationActionError ?: alertSettingsError)?.let { message ->
+            (stationActionError ?: alertSettingsError ?: geofenceError)?.let { message ->
                 ErrorBanner(
                     message = message,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     onDismiss = {
                         stationViewModel.clearActionError()
                         alertSettingsViewModel.clearActionError()
+                        geofenceViewModel.clearError()
                     }
                 )
             }
@@ -320,7 +358,9 @@ private fun SignedInApp(
                     pendingStationId = pendingStationId,
                     userLocation = userLocation,
                     onStationClick = { overlay = OverlayRoute.StationDetail(it.id) },
-                    onToggleCheckIn = { stationViewModel.toggleCheckIn(it) }
+                    onToggleCheckIn = {
+                        stationViewModel.toggleCheckIn(it, profile.activeStationId)
+                    }
                 )
                 Route.MainTab.Alerts -> {
                     val events = (eventsState as? UiState.Success)?.data ?: emptyList()
@@ -333,6 +373,11 @@ private fun SignedInApp(
                         ?: 0,
                     alertsEnabled = alertsEnabled,
                     onAlertsEnabledChange = { alertSettingsViewModel.setAlertsEnabled(it) },
+                    automaticCheckInEnabled = profile.automaticCheckInEnabled,
+                    automaticCheckInBusy = geofenceSettingBusy,
+                    onAutomaticCheckInChange = {
+                        geofenceViewModel.setAutomaticCheckInEnabled(uid, it)
+                    },
                     onChangeHomeStation = { overlay = OverlayRoute.ChangeHomeStation },
                     onSignOut = onSignOut
                 )
