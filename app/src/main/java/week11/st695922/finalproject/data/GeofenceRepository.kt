@@ -45,6 +45,7 @@ class GeofenceRepository(context: Context) {
                 .setRequestId(station.id)
                 .setCircularRegion(station.lat, station.lng, GEOFENCE_RADIUS_METERS)
                 .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                .setNotificationResponsiveness(GEOFENCE_RESPONSIVENESS_MILLIS)
                 .setTransitionTypes(
                     Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT
                 )
@@ -71,6 +72,7 @@ class GeofenceRepository(context: Context) {
 
     companion object {
         private const val GEOFENCE_REQUEST_CODE = 1001
-        private const val GEOFENCE_RADIUS_METERS = 125f
+        private const val GEOFENCE_RADIUS_METERS = 300f
+        private const val GEOFENCE_RESPONSIVENESS_MILLIS = 30_000
     }
 }

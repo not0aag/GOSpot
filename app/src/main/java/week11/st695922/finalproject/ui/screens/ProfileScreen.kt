@@ -1,6 +1,10 @@
 package week11.st695922.finalproject.ui.screens
 
 import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -29,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -55,6 +60,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import week11.st695922.finalproject.model.UserProfile
 import week11.st695922.finalproject.ui.hasNotificationPermission
@@ -65,6 +71,9 @@ fun ProfileScreen(
     checkInsCount: Int,
     alertsEnabled: Boolean,
     onAlertsEnabledChange: (Boolean) -> Unit,
+    automaticCheckInEnabled: Boolean,
+    automaticCheckInBusy: Boolean,
+    onAutomaticCheckInChange: (Boolean) -> Unit,
     onChangeHomeStation: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier
@@ -112,11 +121,10 @@ fun ProfileScreen(
                 onAction = onChangeHomeStation
             )
             SettingsDivider()
-            ToggleRow(
-                icon = Icons.Filled.DirectionsCar,
-                title = "Automatic check-in",
-                subtitle = "Check in and out automatically using device location.",
-                initialValue = false
+            AutomaticCheckInToggle(
+                enabled = automaticCheckInEnabled,
+                busy = automaticCheckInBusy,
+                onEnabledChange = onAutomaticCheckInChange
             )
             SettingsDivider()
             ToggleRow(
@@ -140,6 +148,7 @@ fun ProfileScreen(
         Spacer(Modifier.height(24.dp))
         OutlinedButton(
             onClick = onSignOut,
+            enabled = !automaticCheckInBusy,
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(12.dp),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
@@ -379,6 +388,104 @@ private fun SettingsDivider() {
 }
 
 @Composable
+private fun AutomaticCheckInToggle(
+    enabled: Boolean,
+    busy: Boolean,
+    onEnabledChange: (Boolean) -> Unit
+) {
+    val context = LocalContext.current
+    var fineLocationGranted by remember {
+        mutableStateOf(hasPermission(context, Manifest.permission.ACCESS_FINE_LOCATION))
+    }
+    var backgroundLocationGranted by remember {
+        mutableStateOf(hasPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION))
+    }
+    var pendingEnable by rememberSaveable { mutableStateOf(false) }
+    var permissionAttempted by rememberSaveable { mutableStateOf(false) }
+
+    fun refreshPermissions() {
+        fineLocationGranted = hasPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+        backgroundLocationGranted = hasPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+    }
+
+    val settingsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        refreshPermissions()
+        if (pendingEnable && fineLocationGranted && backgroundLocationGranted) {
+            pendingEnable = false
+            onEnabledChange(true)
+        }
+    }
+
+    fun openAppSettings() {
+        permissionAttempted = true
+        pendingEnable = true
+        settingsLauncher.launch(
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:${context.packageName}")
+            )
+        )
+    }
+
+    val foregroundLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        fineLocationGranted = granted
+        if (granted) openAppSettings() else permissionAttempted = true
+    }
+
+    LifecycleResumeEffect(Unit) {
+        refreshPermissions()
+        if (pendingEnable && fineLocationGranted && backgroundLocationGranted) {
+            pendingEnable = false
+            onEnabledChange(true)
+        }
+        onPauseOrDispose { }
+    }
+
+    val permissionsReady = fineLocationGranted && backgroundLocationGranted
+    val subtitle = when {
+        busy -> "Updating automatic check-in…"
+        enabled && !permissionsReady ->
+            "Background location is missing. Turn this off, then enable it again."
+        else -> "Check in within 300 m and check out when you leave."
+    }
+    ToggleRow(
+        icon = Icons.Filled.LocationOn,
+        title = "Automatic check-in",
+        subtitle = subtitle,
+        checked = enabled,
+        onCheckedChange = { wantsEnabled ->
+            permissionAttempted = false
+            when {
+                !wantsEnabled -> {
+                    pendingEnable = false
+                    onEnabledChange(false)
+                }
+                permissionsReady -> onEnabledChange(true)
+                !fineLocationGranted -> {
+                    pendingEnable = true
+                    foregroundLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                }
+                else -> openAppSettings()
+            }
+        },
+        enabled = !busy
+    )
+
+    if ((enabled && !permissionsReady) || (permissionAttempted && !permissionsReady)) {
+        Text(
+            "Allow location all the time in Android Settings to use automatic check-in.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(start = 68.dp, end = 16.dp, bottom = 16.dp)
+        )
+    }
+}
+
+@Composable
 private fun AlertsToggle(
     homeStationName: String,
     hasHomeStation: Boolean,
@@ -432,6 +539,9 @@ private fun AlertsToggle(
         )
     }
 }
+
+private fun hasPermission(context: android.content.Context, permission: String): Boolean =
+    ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
 private fun initials(name: String): String =
     name.trim()

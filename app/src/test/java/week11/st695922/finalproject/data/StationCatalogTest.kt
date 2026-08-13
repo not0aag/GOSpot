@@ -56,4 +56,17 @@ class StationCatalogTest {
         assertEquals(999, corrected.capacityTotal)
         assertEquals(321, corrected.currentOccupancy)
     }
+
+    @Test
+    fun `station uses firestore availability fields directly`() {
+        val station = Station(
+            capacityTotal = 100,
+            currentOccupancy = 0,
+            spacesFree = 25,
+            percentFull = 75
+        )
+
+        assertEquals(25, station.spacesFree)
+        assertEquals(75, station.percentFull)
+    }
 }

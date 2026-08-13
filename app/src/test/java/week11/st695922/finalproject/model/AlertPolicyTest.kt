@@ -27,7 +27,15 @@ class AlertPolicyTest {
         capacityTotal = capacity,
         currentOccupancy = occupancy,
         lat = lat,
-        lng = lng
+        lng = lng,
+        spacesFree = (capacity - occupancy).coerceAtLeast(0),
+        percentFull = if (capacity <= 0) 0 else (occupancy * 100) / capacity
+    )
+
+    private fun Station.withOccupancy(occupancy: Int) = copy(
+        currentOccupancy = occupancy,
+        spacesFree = (capacityTotal - occupancy).coerceAtLeast(0),
+        percentFull = if (capacityTotal <= 0) 0 else (occupancy * 100) / capacityTotal
     )
 
     // Real seed coordinates.
@@ -67,7 +75,7 @@ class AlertPolicyTest {
 
     @Test
     fun `skips a nearer station that is itself over the threshold`() {
-        val fullBronte = bronte.copy(currentOccupancy = 1700) // 98% full
+        val fullBronte = bronte.withOccupancy(1700) // 98% full
         val alternate = AlertPolicy.suggestAlternate(oakville, listOf(oakville, fullBronte, clarkson))
         assertEquals(clarkson.id, alternate?.id)
     }
@@ -75,7 +83,7 @@ class AlertPolicyTest {
     @Test
     fun `never suggests the home station itself`() {
         // A half-empty home station would otherwise win outright at distance 0.
-        val roomyHome = oakville.copy(currentOccupancy = 100)
+        val roomyHome = oakville.withOccupancy(100)
         val alternate = AlertPolicy.suggestAlternate(roomyHome, listOf(roomyHome, bronte, clarkson))
         assertEquals(bronte.id, alternate?.id)
     }
@@ -84,7 +92,7 @@ class AlertPolicyTest {
     fun `returns null when every other lot is also full`() {
         val alternate = AlertPolicy.suggestAlternate(
             oakville,
-            listOf(oakville, bronte.copy(currentOccupancy = 1700), clarkson.copy(currentOccupancy = 2550))
+            listOf(oakville, bronte.withOccupancy(1700), clarkson.withOccupancy(2550))
         )
         assertNull(alternate)
     }
