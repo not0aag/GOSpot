@@ -19,7 +19,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -102,19 +101,6 @@ fun MapScreen(
                 ) {
                     Text("Lakeshore West · ${stations.size} stations", style = MaterialTheme.typography.bodyMedium)
                     Text("● LIVE", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("All stations", "Has space").forEachIndexed { index, label ->
-                    FilterChip(
-                        selected = index == 0,
-                        onClick = { },
-                        label = { Text(label) },
-                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-                        )
-                    )
                 }
             }
         }
