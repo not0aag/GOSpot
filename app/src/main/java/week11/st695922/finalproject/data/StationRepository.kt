@@ -25,7 +25,9 @@ class StationRepository(
         val listener = stationsRef.addSnapshotListener { snapshot, _ ->
             if (snapshot != null) {
                 trySend(snapshot.documents.map { doc ->
-                    doc.toObject(Station::class.java)?.copy(id = doc.id) ?: Station(id = doc.id)
+                    val station = doc.toObject(Station::class.java)?.copy(id = doc.id)
+                        ?: Station(id = doc.id)
+                    StationCatalog.applyCanonicalLocation(station)
                 })
             }
         }

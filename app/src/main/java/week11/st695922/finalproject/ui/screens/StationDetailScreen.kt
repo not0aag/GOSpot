@@ -1,9 +1,5 @@
 package week11.st695922.finalproject.ui.screens
 
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.net.Uri
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -38,6 +34,7 @@ import week11.st695922.finalproject.ui.components.ErrorBanner
 import week11.st695922.finalproject.ui.components.OccupancyBar
 import week11.st695922.finalproject.ui.components.PrimaryButton
 import week11.st695922.finalproject.ui.components.SecondaryButton
+import week11.st695922.finalproject.ui.navigation.StationNavigator
 import week11.st695922.finalproject.ui.theme.GoGreen
 
 @Composable
@@ -147,16 +144,7 @@ fun StationDetailScreen(
             Spacer(Modifier.height(8.dp))
             PrimaryButton(
                 text = "Navigate here",
-                onClick = {
-                    val uri = Uri.parse("geo:${station.lat},${station.lng}?q=${station.lat},${station.lng}(${station.name})")
-                    val intent = Intent(Intent.ACTION_VIEW, uri)
-                    // No maps app is a real configuration on bare AOSP images.
-                    try {
-                        context.startActivity(intent)
-                    } catch (e: ActivityNotFoundException) {
-                        Log.w("StationDetail", "No app can handle a geo: intent", e)
-                    }
-                }
+                onClick = { StationNavigator.navigate(context, station) }
             )
         }
     }

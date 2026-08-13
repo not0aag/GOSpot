@@ -1,40 +1,46 @@
 package week11.st695922.finalproject.data
 
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.suspendCancellableCoroutine
-import week11.st695922.finalproject.model.Station
 import kotlin.coroutines.resume
 
 /**
- * Corresponds to Week 3.1 Slide 22's "Add Start Collection" setup step: seeds
- * the `stations` collection with the six Lakeshore West lots shown in the
- * Figma mocks (name/capacity/occupancy read directly off the "Pick home
- * station" and "Stations list" screens; lat/lng are approximate real-world
- * coordinates for these GO stations, not exact).
+ * Creates missing demo stations and corrects location fields on existing ones.
+ * Existing parking capacity and occupancy values are never overwritten.
  */
 class StationSeeder(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
-    private val demoStations = listOf(
-        Station("oakville", "Oakville GO", "214 Cross Ave · Lakeshore West", 1987, 1550, 43.45500, -79.68250),
-        Station("bronte", "Bronte GO", "2104 Wyecroft Rd · Lakeshore West", 1730, 588, 43.418624, -79.725038),
-        Station("clarkson", "Clarkson GO", "Clarkson Rd S · Lakeshore West", 2600, 1430, 43.5183, -79.6392),
-        Station("portcredit", "Port Credit GO", "70 Elizabeth St S · Lakeshore West", 1300, 936, 43.5550, -79.5878),
-        Station("mimico", "Mimico GO", "285 Royal York Rd · Lakeshore West", 400, 352, 43.6169, -79.4959),
-        Station("longbranch", "Long Branch GO", "3131 Lakeshore Blvd W · Lakeshore West", 800, 328, 43.5928, -79.5435)
-    )
-
-    suspend fun seedIfEmpty(): Result<Unit> = suspendCancellableCoroutine { cont ->
+    internal suspend fun synchronizeStations(): Result<Unit> = suspendCancellableCoroutine { cont ->
         val stationsRef = firestore.collection("stations")
-        stationsRef.limit(1).get()
+        stationsRef.get()
             .addOnSuccessListener { snapshot ->
-                if (!snapshot.isEmpty) {
+                val existingStations = snapshot.documents.associateBy { it.id }
+                val batch = firestore.batch()
+                var hasWrites = false
+                StationCatalog.stations.forEach { station ->
+                    val document = stationsRef.document(station.id)
+                    val existing = existingStations[station.id]
+                    if (existing == null) {
+                        batch.set(document, station)
+                        hasWrites = true
+                    } else if (
+                        existing.getString("address") != station.address ||
+                        existing.getDouble("lat") != station.lat ||
+                        existing.getDouble("lng") != station.lng
+                    ) {
+                        batch.set(
+                            document,
+                            StationCatalog.firestoreLocationFields(station),
+                            SetOptions.merge()
+                        )
+                        hasWrites = true
+                    }
+                }
+                if (!hasWrites) {
                     cont.resume(Result.success(Unit))
                     return@addOnSuccessListener
-                }
-                val batch = firestore.batch()
-                demoStations.forEach { station ->
-                    batch.set(stationsRef.document(station.id), station)
                 }
                 batch.commit()
                     .addOnSuccessListener { cont.resume(Result.success(Unit)) }

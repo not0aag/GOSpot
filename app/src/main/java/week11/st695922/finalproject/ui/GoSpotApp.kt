@@ -140,7 +140,11 @@ private fun MainAppFlow(uid: String, authViewModel: AuthViewModel) {
 
     val geofenceViewModel: GeofenceViewModel = viewModel()
     val stationsForGeofencing = (stationsState as? UiState.Success)?.data ?: emptyList()
-    LaunchedEffect(stationsForGeofencing.map { it.id }) {
+    LaunchedEffect(
+        stationsForGeofencing
+            .sortedBy { it.id }
+            .map { Triple(it.id, it.lat, it.lng) }
+    ) {
         if (stationsForGeofencing.isNotEmpty() &&
             hasLocationPermission(context) &&
             hasBackgroundLocationPermission(context)
